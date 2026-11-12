@@ -1,0 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&display=swap');
+:root{
+  --bg:#1d2130; --bg2:#272c3f; --panel:#2f3550; --line:#3d4463;
+  --o:#2f8cff; --o-soft:rgba(47,140,255,.18); --x:#ff4d5e; --x-soft:rgba(255,77,94,.18);
+  --gold:#ffd23f; --text:#f4f6ff; --muted:#a3abc9; --ok:#3ddc84;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:'Noto Sans KR',system-ui,sans-serif}
+.title{font-family:'Black Han Sans','Noto Sans KR',sans-serif;letter-spacing:.5px}
+button{font-family:inherit;cursor:pointer}
+#conn{position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;text-align:center;font-size:13px;padding:6px;transform:translateY(-100%);transition:.2s;z-index:99}
+#conn.show{transform:none}
+.mark-o,.mark-x{display:inline-grid;place-items:center;font-family:'Black Han Sans',sans-serif;line-height:1}
+.mark-o{color:var(--o)} .mark-x{color:var(--x)}
+.timerbar{height:10px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden}
+.timerbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ff9f1c);border-radius:99px;transition:width .2s linear}
+.timerbar.low>i{background:var(--x)}
+.mark-a{color:var(--o)} .mark-b{color:var(--x)}
+.mark-a.sym,.mark-b.sym{font-family:'Black Han Sans',sans-serif;line-height:1}
+.mark-a.word,.mark-b.word{white-space:nowrap;font-family:'Black Han Sans','Noto Sans KR',sans-serif;line-height:1.1;word-break:keep-all;text-align:center}
+.boot{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);z-index:90;background:var(--bg)}
+.boot.err{color:var(--x)}

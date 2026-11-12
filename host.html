@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>서바이벌 퀴즈 · 마스터</title>
+<link rel="stylesheet" href="/common.css">
+<script src="/config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+body{background:var(--bg);padding-bottom:96px}
+.wrap{max-width:1100px;margin:0 auto;padding:14px;display:grid;gap:14px;grid-template-columns:1fr 1fr}
+@media(max-width:820px){.wrap{grid-template-columns:1fr;padding:10px}}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+.full{grid-column:1/-1}
+h2{margin:0 0 12px;font-size:16px;color:var(--muted);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{border:0;border-radius:12px;padding:12px 14px;font-size:15px;font-weight:700;background:var(--panel);color:var(--text);text-decoration:none;text-align:center;display:inline-block}
+.btn:disabled{opacity:.35}
+.btn.pri{background:var(--gold);color:#2a2100;font-size:19px;padding:16px}
+.btn.a{background:var(--o)}.btn.b{background:var(--x)}.btn.ok{background:var(--ok);color:#063}
+.btn.sm{padding:7px 10px;font-size:13px;border-radius:8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+.status{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.pill{background:var(--panel);border-radius:99px;padding:6px 12px;font-size:14px}
+.pill b{color:var(--gold)}
+.cur{background:var(--bg);border-radius:12px;padding:14px;margin-bottom:12px}
+.cur .qq{font-size:19px;font-weight:900;line-height:1.4;word-break:keep-all}
+.cur .aa{margin-top:6px;color:var(--muted);font-size:14px}
+.ctl{display:grid;gap:8px}
+label.sw{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:15px}
+label.sw input{width:20px;height:20px;flex:none}
+input,textarea,select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:15px;font-family:inherit;min-width:0}
+input:focus,textarea:focus{outline:none;border-color:var(--gold)}
+textarea{width:100%;resize:vertical;line-height:1.5}
+.muted{color:var(--muted);font-size:13px;line-height:1.6}
+#toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--x);color:#fff;padding:10px 18px;border-radius:12px;display:none;z-index:60;font-weight:700;max-width:90vw;text-align:center}
+#toast.good{background:var(--ok);color:#053}
+/* 하단 고정 바 */
+#bar{position:fixed;left:0;right:0;bottom:0;background:rgba(29,33,48,.96);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;z-index:50}
+#bar .st{flex:1;min-width:0;font-size:14px;line-height:1.35}
+#bar .st b{color:var(--gold)}
+#bar .btn{white-space:nowrap}
+/* 라운드 편집 */
+.rounds{display:grid;gap:12px}
+.rc{background:var(--bg);border:2px solid transparent;border-radius:14px;padding:12px;display:grid;gap:8px}
+.rc.bad{border-color:var(--x)}.rc.now{border-color:var(--gold)}.rc.done{opacity:.6}
+.rc .hd{display:flex;align-items:center;gap:8px}
+.rc .no{font-family:'Black Han Sans';font-size:22px;color:var(--gold)}
+.badge{font-size:12px;padding:3px 8px;border-radius:99px;background:var(--panel);color:var(--muted)}
+.badge.now{background:var(--gold);color:#2a2100}
+.lbls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lbls input:nth-child(1){border-color:rgba(47,140,255,.6)}.lbls input:nth-child(2){border-color:rgba(255,77,94,.6)}
+.ansrow{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center}
+.ansbtn{border:2px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px;font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ansbtn.on.A{background:var(--o);border-color:var(--o)}.ansbtn.on.B{background:var(--x);border-color:var(--x)}
+.mini{display:grid;grid-template-columns:auto 90px 1fr;gap:8px;align-items:center}
+.pl{max-height:460px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
+.pi{display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:10px;padding:6px 8px;font-size:14px}
+.pi.dead{opacity:.5}.pi .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.qrs{grid-template-columns:1fr}}
+.qrb{background:var(--bg);border-radius:12px;padding:12px;display:grid;gap:8px;justify-items:center;text-align:center}
+.qrimg{background:#fff;padding:8px;border-radius:10px}
+.qrimg img,.qrimg canvas{width:170px!important;height:170px!important;display:block}
+.blur{filter:blur(12px);pointer-events:none}
+.code{font-family:'Black Han Sans';font-size:26px;letter-spacing:3px;color:var(--gold)}
+#landing{max-width:440px;margin:10vh auto;padding:16px;display:none;gap:14px}
+#landing.on{display:grid}
+.recent{display:grid;gap:8px}
+</style>
+</head><body>
+<div class="boot" id="boot">연결 중…</div>
+<div id="toast"></div>
+
+<div id="landing">
+  <div class="title" style="font-size:34px;text-align:center">서바이벌 퀴즈<br><span style="color:var(--gold);font-size:24px">마스터</span></div>
+  <input id="newTitle" placeholder="게임 제목 (선택, 대형화면에 표시)" maxlength="30">
+  <button class="btn pri" id="createBtn">＋ 새 게임방 만들기</button>
+  <div class="muted">다른 기기에서 진행하려면 이 화면이 아니라, 처음 만든 기기에 뜨는 <b>마스터 QR</b>을 찍으세요.</div>
+  <div class="recent" id="recent"></div>
+  <div class="muted" id="landErr" style="color:var(--x)"></div>
+</div>
+
+<div class="wrap" id="main" style="display:none">
+  <!-- 진행 -->
+  <div class="card full">
+    <div class="status">
+      <span class="pill">방 <b id="pRoom"></b></span>
+      <span class="pill" id="phase" style="font-weight:900"></span>
+      <span class="pill">참가 <b id="nTotal">0</b></span>
+      <span class="pill">생존 <b id="nAlive">0</b></span>
+      <span class="pill" id="pCnt"></span>
+      <span class="pill">라운드 <b id="nQ">0</b>/<b id="nQT">0</b></span>
+    </div>
+    <div class="cur"><div class="qq" id="curQ"></div><div class="aa" id="curA"></div></div>
+    <div class="ctl" id="ctl"></div>
+  </div>
+
+  <!-- QR -->
+  <div class="card">
+    <h2><span>QR 코드</span><a class="btn sm" id="screenLink" target="_blank">📺 대형화면 열기</a></h2>
+    <div class="qrs">
+      <div class="qrb"><b>참가자용</b><div class="qrimg" id="qrP"></div><div class="muted" id="urlP" style="word-break:break-all"></div><button class="btn sm" id="copyP">주소 복사</button></div>
+      <div class="qrb"><b style="color:var(--x)">마스터용 🔒</b><div class="qrimg blur" id="qrM"></div>
+        <div class="muted">찍으면 그 폰이 이 화면처럼 모든 걸 제어해요.<br>빔프로젝터에 띄우지 마세요!</div>
+        <button class="btn sm" id="showM">마스터 QR 보기</button></div>
+    </div>
+  </div>
+
+  <!-- 설정 -->
+  <div class="card">
+    <h2>설정</h2>
+    <div class="row"><span>기본 제한시간</span><input type="number" id="defDur" min="3" max="300" style="width:80px"><span class="muted">초 (라운드에 비워두면 사용)</span></div>
+    <label class="sw"><input type="checkbox" id="joinOpen"> 참가 허용 (끄면 새로 못 들어옴)</label>
+    <label class="sw"><input type="checkbox" id="allWrong"> 생존자 전원 오답이면 모두 살리기</label>
+    <label class="sw"><input type="checkbox" id="crowdOn"> 참가자 폰에 다른 사람 움직임 보이기</label>
+    <div class="row" style="margin-top:6px">
+      <button class="btn sm" id="reviveAll">전원 부활</button>
+      <button class="btn sm" id="resetBtn">게임 초기화 (참가자 유지)</button>
+      <button class="btn sm b" id="clearBtn">참가자 전부 내보내기</button>
+    </div>
+    <div class="muted" style="margin-top:10px">게임 제목 <input id="title" maxlength="30" style="width:100%;margin-top:4px"></div>
+  </div>
+
+  <!-- 라운드 편집 -->
+  <div class="card full">
+    <h2><span>라운드 · 문제 편집</span><span class="row"><span class="muted" id="dirty"></span><button class="btn ok" id="saveBtn">💾 저장</button></span></h2>
+    <div class="row" style="margin-bottom:10px">
+      <span>라운드 수</span><input type="number" id="nRounds" min="1" max="200" style="width:80px"><button class="btn sm" id="applyN">적용</button>
+      <span class="grow"></span>
+      <label class="btn sm">CSV 불러오기<input type="file" id="csv" accept=".csv,.txt" hidden></label>
+      <button class="btn sm" id="csvOut">CSV 내보내기</button>
+    </div>
+    <div class="row muted" style="margin-bottom:12px">
+      전체 적용:
+      <select id="allPreset"><option value="">선택지…</option></select><button class="btn sm" id="applyPreset">선택지 적용</button>
+      <input type="number" id="allT" placeholder="초" min="3" max="300" style="width:70px"><button class="btn sm" id="applyT">타이머 적용</button>
+    </div>
+    <div class="rounds" id="rounds"></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="addR">＋ 라운드 추가</button><span class="grow"></span><button class="btn ok" id="saveBtn2">💾 저장</button></div>
+  </div>
+
+  <!-- 참가자 -->
+  <div class="card full">
+    <h2><span>참가자</span><input id="search" placeholder="이름 검색" style="padding:6px 10px;font-size:14px;width:150px"></h2>
+    <div class="pl" id="pl"></div>
+  </div>
+</div>
+
+<div id="bar" style="display:none"><div class="st" id="barSt"></div><div id="barBtn"></div></div>
+
+<script type="module">
+import { initDB, DEL, NOW, qs, esc, labelHTML, makeClock, qrInto, withMock } from '/db.js';
+const $=id=>document.getElementById(id);
+const PRESETS=[['O','X'],['파랑','빨강'],['예','아니오'],['맞다','아니다'],['A','B'],['1번','2번']];
+const SAMPLE=[
+  {q:'문어의 심장은 3개다',a:'O',b:'X',ans:'A',t:10,e:'아가미 심장 2개 + 몸 심장 1개'},
+  {q:'바나나가 열리는 것은?',a:'나무',b:'풀',ans:'B',t:10,e:'바나나는 거대한 여러해살이 풀이에요'},
+  {q:'펭귄은 북극에도 산다',a:'O',b:'X',ans:'B',t:10,e:'야생 펭귄은 남반구에만 살아요'},
+];
+const blank=()=>({q:'',a:'O',b:'X',ans:'',t:'',e:''});
+function toast(t,good){const el=$('toast');el.textContent=t;el.className=good?'good':'';el.style.display='block';clearTimeout(el._t);el._t=setTimeout(()=>el.style.display='none',2600)}
+
+let db;try{db=await initDB()}catch(e){$('boot').classList.add('err');$('boot').textContent='연결 실패: '+e.message;throw e}
+$('boot').remove();
+
+// ---------- 방 입장 ----------
+const recentRooms=()=>{try{return JSON.parse(localStorage.getItem('q_hosts'))||[]}catch(_){return[]}};
+function remember(r,k,title){const l=recentRooms().filter(x=>x.r!==r);l.unshift({r,k,title:title||'',at:Date.now()});localStorage.setItem('q_hosts',JSON.stringify(l.slice(0,8)))}
+let room=(qs.get('r')||'').toUpperCase(), KEY=new URLSearchParams(location.hash.slice(1)).get('k')||'';
+if(room&&!KEY)KEY=(recentRooms().find(x=>x.r===room)||{}).k||'';
+if(room&&KEY){remember(room,KEY);history.replaceState(null,'',withMock('/host?r='+room))}
+
+async function becomeHost(r,k){
+  const h=await db.get(`rooms/${r}/hosts/${db.uid}`).catch(()=>null);
+  if(h)return true;
+  try{await db.set(`rooms/${r}/hosts/${db.uid}`,{key:k});return true}catch(e){return false}
+}
+async function landing(msg){
+  $('landing').classList.add('on');$('landErr').textContent=msg||'';
+  const l=recentRooms();
+  $('recent').innerHTML=l.length?'<div class="muted">최근에 연 방</div>'+l.map(x=>`<button class="btn" data-r="${x.r}" data-k="${x.k}">${esc(x.r)} ${x.title?'· '+esc(x.title):''} <span class="muted">${new Date(x.at).toLocaleDateString()}</span></button>`).join(''):'';
+}
+$('recent').onclick=e=>{const b=e.target.closest('[data-r]');if(b)location.href=withMock('/host?r='+b.dataset.r)+'#k='+b.dataset.k};
+const rand=(n,abc)=>Array.from(crypto.getRandomValues(new Uint32Array(n)),v=>abc[v%abc.length]).join('');
+async function makeRoom(code,k,title){
+  let items;try{items=JSON.parse(localStorage.getItem('q_draft'))}catch(_){}
+  if(!Array.isArray(items)||!items.length)items=SAMPLE;
+  await db.create(`rooms/${code}`,{owner:db.uid,title,phase:'lobby',round:0,g:0,q:'',a:'O',b:'X',ans:null,e:'',dur:10,defaultDur:10,
+    startedAt:NOW,startedKey:'',qIdx:-1,used:[],qNo:0,qTotal:items.length,stats:null,dead:{},revived:{},joinOpen:true,allWrongSurvive:true,winners:null,created:NOW});
+  await db.set(`rooms/${code}/hosts/${db.uid}`,{key:''});
+  await db.set(`rooms/${code}/secret/key`,{v:k});
+  await db.set(`rooms/${code}/quiz/list`,{items:cleanItems(items)});
+}
+$('createBtn').onclick=async()=>{
+  $('createBtn').disabled=true;
+  try{
+    let code;for(let i=0;i<5;i++){code=rand(5,'ABCDEFGHJKLMNPQRSTUVWXYZ23456789');if(!(await db.get(`rooms/${code}`)))break}
+    const k=rand(20,'abcdefghijkmnpqrstuvwxyz23456789');
+    const title=$('newTitle').value.trim();
+    await makeRoom(code,k,title);
+    remember(code,k,title);location.href=withMock('/host?r='+code)+'#k='+k;
+  }catch(e){$('landErr').textContent='방 만들기 실패: '+e.message;$('createBtn').disabled=false}
+};
+
+
+// ---------- 마스터 화면 ----------
+let R=null,P=[],Q=[],savedJSON='',dirty=false;
+const clock=makeClock();
+const rp=p=>`rooms/${room}${p||''}`;
+const up=patch=>db.update(rp(),patch).catch(e=>toast('저장 실패: '+e.message));
+const alive=p=>{const d=R.dead||{},rv=R.revived||{};if(d[p.id]!==undefined)return false;if(p.late&&p.g===(R.g||0)&&!rv[p.id])return false;return true};
+const ch=p=>p.round===R.round?p.choice:'';
+
+async function start(){
+  $('main').style.display='';$('bar').style.display='';$('pRoom').textContent=room;
+  const pUrl=withMock(location.origin+'/?r='+room);
+  $('urlP').textContent=pUrl.replace(/^https?:\/\//,'');qrInto($('qrP'),pUrl,340);
+  $('screenLink').href=withMock('/screen?r='+room);
+  $('copyP').onclick=()=>navigator.clipboard.writeText(pUrl).then(()=>toast('복사했어요',1));
+  const sec=await db.get(rp('/secret/key')).catch(()=>null);
+  const mUrl=withMock(location.origin+'/host?r='+room)+'#k='+(sec?.v||KEY);
+  qrInto($('qrM'),mUrl,340);
+  $('showM').onclick=()=>{const b=$('qrM').classList.toggle('blur');$('showM').textContent=b?'마스터 QR 보기':'숨기기'};
+  const ql=await db.get(rp('/quiz/list'));
+  Q=(ql?.items||[]).map(x=>({...x}));if(!Q.length)Q=[blank()];
+  savedJSON=JSON.stringify(cleanItems(Q));renderEditor();
+  db.watch(rp(),d=>{if(!d)return;R=d;render()});
+  db.watchCol(rp('/players'),l=>{P=l;if(R)render()});
+}
+
+const PH={lobby:'대기실',question:'진행 중',locked:'마감',reveal:'정답 공개',ended:'게임 종료'};
+function render(){
+  const left=clock(R),locked=R.phase==='locked'||(R.phase==='question'&&left<=0);
+  const ph=R.phase==='question'&&locked?'locked':R.phase;
+  $('phase').textContent=PH[ph];
+  const al=P.filter(alive);
+  $('nTotal').textContent=P.length;$('nAlive').textContent=al.length;
+  $('nQ').textContent=R.qNo||0;$('nQT').textContent=Q.length;
+  const inQ=R.phase!=='lobby'&&R.phase!=='ended';
+  const nA=al.filter(p=>ch(p)==='A').length,nB=al.filter(p=>ch(p)==='B').length;
+  $('pCnt').innerHTML=inQ?`${esc(R.a)} <b>${nA}</b> · ${esc(R.b)} <b>${nB}</b> · 미선택 <b>${al.length-nA-nB}</b>`:'선택 -';
+  const q=Q[R.qIdx];
+  if(inQ){$('curQ').textContent=`R${R.qNo}. ${R.q}`;
+    $('curA').innerHTML=q?`정답 <b class="${q.ans==='A'?'mark-a':'mark-b'}">${esc(q.ans==='A'?q.a:q.b)}</b>${q.e?' · '+esc(q.e):''}`:''}
+  else{$('curQ').textContent=R.phase==='ended'?'게임이 끝났어요':'대기 중 — 참가자가 다 들어오면 첫 라운드를 시작하세요';$('curA').textContent=''}
+  const hasNext=Q.some((_,i)=>!(R.used||[]).includes(i));
+  let h='',bar='';
+  if(R.phase==='lobby'){h=`<button class="btn pri" data-c="next">▶ 첫 라운드 시작</button>`;bar=h}
+  if(R.phase==='question'&&!locked){h=`<button class="btn pri" data-c="lock">⏹ 지금 마감</button><div class="row"><button class="btn grow" data-c="extend">+5초</button><button class="btn grow a" data-c="reveal">바로 정답 공개</button></div>`;bar=`<button class="btn pri" data-c="reveal">💡 정답 공개</button>`}
+  if(locked){h=`<button class="btn pri" data-c="reveal">💡 정답 공개</button>`;bar=h}
+  if(R.phase==='reveal'){const st=R.stats||{};
+    h=`<div class="muted">${esc(R.a)} ${st.a}명 · ${esc(R.b)} ${st.b}명 · 미선택 ${st.none}명 → 생존 <b style="color:var(--ok)">${st.survivors}</b>명${st.saved?' (전원 오답이라 모두 생존)':''}</div>
+    <button class="btn pri" data-c="next" ${hasNext?'':'disabled'}>▶ 다음 라운드</button>
+    <div class="row"><button class="btn grow" data-c="reviveLast">방금 탈락자 부활</button><button class="btn grow b" data-c="end">🏁 게임 종료 · 우승자 발표</button></div>`;
+    bar=hasNext?`<button class="btn pri" data-c="next">▶ 다음 라운드</button>`:`<button class="btn pri b" data-c="end">🏁 종료</button>`}
+  if(R.phase==='ended'){h=`<button class="btn pri" data-c="reset">🔄 새 게임 (참가자 유지)</button>`;bar=h}
+  if($('ctl').dataset.h!==h){$('ctl').innerHTML=h;$('ctl').dataset.h=h}
+  if($('barBtn').dataset.h!==bar){$('barBtn').innerHTML=bar;$('barBtn').dataset.h=bar}
+  $('barSt').innerHTML=`<b>${PH[ph]}</b> · ${inQ?`R${R.qNo}/${Q.length}`:`${Q.length}라운드 준비`}<br>생존 <b>${al.length}</b>/${P.length}${R.phase==='question'&&!locked?` · ⏱ <b>${Math.ceil(left/1000)}</b>초`:''}`;
+  if(document.activeElement!==$('defDur'))$('defDur').value=R.defaultDur||10;
+  if(document.activeElement!==$('title'))$('title').value=R.title||'';
+  $('joinOpen').checked=!!R.joinOpen;$('crowdOn').checked=R.crowd!==false;$('allWrong').checked=!!R.allWrongSurvive;
+  markRounds();renderP();
+}
+setInterval(()=>{if(R&&R.phase==='question')render()},500);
+
+// ---------- 진행 명령 ----------
+async function cmd(c){
+  if(c==='next'){
+    if(dirty&&!(await save(true)))return;
+    let idx=Q.findIndex((_,i)=>!(R.used||[]).includes(i));if(idx<0)return toast('남은 라운드가 없어요');return startRound(idx)}
+  if(c==='lock')return up({phase:'locked'});
+  if(c==='extend')return up({dur:(R.dur||10)+5});
+  if(c==='reveal')return reveal();
+  if(c==='reviveLast'){const p={};for(const [id,r] of Object.entries(R.dead||{}))if(r===R.round){p['dead.'+id]=DEL;p['revived.'+id]=true}
+    if(R.stats)p['stats.survivors']=P.filter(alive).length+Object.keys(p).length/2;return up(p)}
+  if(c==='end'){if(!confirm('게임을 끝내고 현재 생존자를 우승자로 발표할까요?'))return;
+    return up({phase:'ended',winners:P.filter(alive).slice(0,300).map(p=>[p.name,p.avatar])})}
+  if(c==='reset'){if(!confirm('처음부터 다시 할까요? (참가자 유지, 모두 생존)'))return;
+    return up({phase:'lobby',g:(R.g||0)+1,dead:{},revived:{},used:[],qNo:0,qIdx:-1,q:'',ans:null,e:'',stats:null,winners:null,a:'O',b:'X'})}
+}
+async function startRound(idx){
+  const q=Q[idx];if(!validItem(q)){toast(`R${idx+1} 내용을 채워 주세요 (문제·선택지·정답)`);return}
+  if(dirty&&!(await save(true)))return;
+  if(!['lobby','reveal'].includes(R.phase)&&!confirm('진행 중인 라운드를 건너뛰고 이 라운드를 시작할까요?'))return;
+  const used=(R.used||[]).includes(idx)?R.used:[...(R.used||[]),idx];
+  await up({phase:'question',round:(R.round||0)+1,q:q.q,a:q.a,b:q.b,ans:null,e:'',dur:Number(q.t)||R.defaultDur||10,
+    startedAt:NOW,startedKey:Math.random().toString(36).slice(2,8),qIdx:idx,used,qNo:used.length,qTotal:Q.length,stats:null});
+  scrollTo({top:0,behavior:'smooth'});
+}
+async function reveal(){
+  const q=Q[R.qIdx];if(!q)return toast('현재 라운드 정보를 찾을 수 없어요');
+  const part=P.filter(alive),ans=q.ans;
+  const right=part.filter(p=>ch(p)===ans);
+  const saved=right.length===0&&R.allWrongSurvive&&part.length>0;
+  const a=part.filter(p=>ch(p)==='A').length,b=part.filter(p=>ch(p)==='B').length;
+  const patch={phase:'reveal',ans,e:q.e||'',stats:{a,b,none:part.length-a-b,before:part.length,survivors:saved?part.length:right.length,saved}};
+  if(!saved)for(const p of part)if(ch(p)!==ans)patch['dead.'+p.id]=R.round;
+  await up(patch);
+}
+$('ctl').onclick=$('barBtn').onclick=e=>{const b=e.target.closest('[data-c]');if(b&&!b.disabled)cmd(b.dataset.c)};
+
+// ---------- 설정 ----------
+$('defDur').onchange=()=>up({defaultDur:Math.max(3,Math.min(300,Math.round(+$('defDur').value)||10))});
+$('title').onchange=()=>up({title:$('title').value.trim().slice(0,30)});
+$('joinOpen').onchange=e=>up({joinOpen:e.target.checked});
+$('allWrong').onchange=e=>up({allWrongSurvive:e.target.checked});
+$('crowdOn').onchange=e=>up({crowd:e.target.checked,...(e.target.checked?{}:{pos:''})});
+// 모든 참가자 위치를 모아서 방 문서에 주기적으로 기록 (참가자 폰에서 다른 사람이 움직이는 모습용)
+let lastPosAt=0;
+setInterval(()=>{
+  if(!R||R.crowd===false||!['lobby','question','locked'].includes(R.phase))return;
+  if(document.visibilityState==='hidden')return;
+  const s=P.filter(alive).slice(0,250).map(p=>`${p.id.slice(0,10)}|${p.avatar}|${p.color}|${R.phase==='lobby'?'':ch(p)}`).join(';');
+  if(s===(R.pos||''))return;
+  if(R.posW&&R.posW!==db.uid&&Date.now()-(R.posAt||0)<8000)return;
+  const fast=window.BACKEND==='server';if(Date.now()-lastPosAt<(R.phase==='lobby'?(fast?1500:3000):(fast?500:1200)))return;
+  lastPosAt=Date.now();up({pos:s,posW:db.uid,posAt:Date.now()});
+},300);
+$('reviveAll').onclick=()=>confirm('탈락한 사람을 모두 살릴까요?')&&up({dead:{},revived:Object.fromEntries(P.map(p=>[p.id,true]))});
+$('resetBtn').onclick=()=>cmd('reset');
+$('clearBtn').onclick=async()=>{if(!confirm(`참가자 ${P.length}명을 모두 내보낼까요? 다시 QR로 들어와야 해요`))return;
+  await Promise.all(P.map(p=>db.del(rp('/players/'+p.id)).catch(()=>{})));await up({dead:{},revived:{}});toast('모두 내보냈어요',1)};
+
+// ---------- 참가자 ----------
+$('search').oninput=()=>renderP();
+function renderP(){
+  const k=$('search').value.trim();
+  const list=P.filter(p=>!k||p.name.includes(k)).map(p=>[p,alive(p)]).sort((x,y)=>y[1]-x[1]||x[0].name.localeCompare(y[0].name)).slice(0,300);
+  const h=list.map(([p,a])=>{const c=ch(p);return `<div class="pi ${a?'':'dead'}">${p.avatar}<span class="nm">${esc(p.name)}</span>
+    ${c&&R.phase!=='lobby'?`<b class="${c==='A'?'mark-a':'mark-b'}" style="font-size:12px">${esc(c==='A'?R.a:R.b)}</b>`:''}
+    ${a?`<button class="btn sm" data-a="eliminate" data-id="${p.id}">탈락</button>`:`<button class="btn sm ok" data-a="revive" data-id="${p.id}">부활</button>`}
+    <button class="btn sm" data-a="kick" data-id="${p.id}" title="퇴장">✕</button></div>`}).join('')||'<div class="muted">아직 참가자가 없어요. 참가자용 QR을 띄워 주세요</div>';
+  if($('pl').dataset.h!==h){$('pl').innerHTML=h;$('pl').dataset.h=h}
+}
+$('pl').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;const id=b.dataset.id,a=b.dataset.a;
+  if(a==='revive')up({['dead.'+id]:DEL,['revived.'+id]:true});
+  if(a==='eliminate')up({['dead.'+id]:R.round,['revived.'+id]:DEL});
+  if(a==='kick'&&confirm('이 참가자를 내보낼까요?')){await db.del(rp('/players/'+id)).catch(()=>{});up({['dead.'+id]:DEL})}};
+
+// ---------- 라운드 편집 ----------
+function cleanItems(list){return list.map(x=>({q:String(x.q||'').trim().slice(0,300),a:String(x.a||'').trim().slice(0,20),b:String(x.b||'').trim().slice(0,20),
+  ans:x.ans==='A'||x.ans==='B'?x.ans:'',t:Math.max(0,Math.min(300,Math.round(+x.t||0)))||'',e:String(x.e||'').trim().slice(0,200)}))}
+const validItem=x=>x&&String(x.q).trim()&&String(x.a).trim()&&String(x.b).trim()&&(x.ans==='A'||x.ans==='B');
+const presetOpts=PRESETS.map((p,i)=>`<option value="${i}">${p[0]} / ${p[1]}</option>`).join('');
+$('allPreset').innerHTML+=presetOpts;
+
+function renderEditor(){
+  $('nRounds').value=Q.length;
+  $('rounds').innerHTML=Q.map((x,i)=>`<div class="rc" data-i="${i}">
+    <div class="hd"><span class="no">R${i+1}</span><span class="badge" data-badge></span><span class="grow"></span>
+      <select data-f="preset" title="선택지 빠르게 고르기"><option value="">선택지 프리셋</option>${presetOpts}</select>
+      <button class="btn sm" data-act="go">▶ 출제</button><button class="btn sm" data-act="up" title="위로">↑</button><button class="btn sm" data-act="del" title="삭제">🗑</button></div>
+    <textarea data-f="q" rows="2" placeholder="문제를 입력하세요">${esc(x.q)}</textarea>
+    <div class="lbls"><input data-f="a" placeholder="왼쪽 선택지 (예: O, 파랑)" value="${esc(x.a)}"><input data-f="b" placeholder="오른쪽 선택지 (예: X, 빨강)" value="${esc(x.b)}"></div>
+    <div class="ansrow"><span class="muted">정답</span><button class="ansbtn A ${x.ans==='A'?'on':''}" data-ans="A">${esc(x.a||'왼쪽')}</button><button class="ansbtn B ${x.ans==='B'?'on':''}" data-ans="B">${esc(x.b||'오른쪽')}</button></div>
+    <div class="mini"><span class="muted">타이머</span><input data-f="t" type="number" min="3" max="300" placeholder="기본" value="${esc(x.t)}"><input data-f="e" placeholder="해설 (선택, 정답 공개 때 표시)" value="${esc(x.e)}"></div>
+  </div>`).join('');
+  markRounds();validateAll();
+}
+function markRounds(){
+  if(!R)return;const used=R.used||[];const inQ=R.phase!=='lobby'&&R.phase!=='ended';
+  document.querySelectorAll('.rc').forEach(el=>{const i=+el.dataset.i;const now=inQ&&i===R.qIdx,done=used.includes(i)&&!now;
+    el.classList.toggle('now',now);el.classList.toggle('done',done);
+    const bd=el.querySelector('[data-badge]');bd.className='badge'+(now?' now':'');bd.textContent=now?'진행 중':done?'완료':'';bd.style.display=now||done?'':'none'});
+}
+function validateAll(){document.querySelectorAll('.rc').forEach(el=>el.classList.toggle('bad',!validItem(Q[+el.dataset.i])))}
+function setDirty(){dirty=JSON.stringify(cleanItems(Q))!==savedJSON;$('dirty').textContent=dirty?'저장 안 된 변경 있음':'';$('dirty').style.color=dirty?'var(--gold)':'';
+  try{localStorage.setItem('q_draft',JSON.stringify(Q))}catch(_){}}
+$('rounds').oninput=e=>{const el=e.target.closest('[data-f]');if(!el)return;const card=el.closest('.rc'),i=+card.dataset.i,f=el.dataset.f;
+  if(f==='preset'){const p=PRESETS[+el.value];if(p){Q[i].a=p[0];Q[i].b=p[1];card.querySelector('[data-f=a]').value=p[0];card.querySelector('[data-f=b]').value=p[1]}el.value=''}
+  else Q[i][f]=el.value;
+  if(f==='a'||f==='b'||f==='preset'){card.querySelector('.ansbtn.A').textContent=Q[i].a||'왼쪽';card.querySelector('.ansbtn.B').textContent=Q[i].b||'오른쪽'}
+  card.classList.toggle('bad',!validItem(Q[i]));setDirty()};
+$('rounds').onclick=e=>{const card=e.target.closest('.rc');if(!card)return;const i=+card.dataset.i;
+  const ab=e.target.closest('[data-ans]');if(ab){Q[i].ans=ab.dataset.ans;card.querySelectorAll('.ansbtn').forEach(b=>b.classList.toggle('on',b===ab));card.classList.toggle('bad',!validItem(Q[i]));setDirty();return}
+  const act=e.target.closest('[data-act]')?.dataset.act;
+  if(act==='go')startRound(i);
+  if(act==='up'&&i>0){if(R&&R.phase!=='lobby'&&R.phase!=='ended')return toast('게임 중에는 순서를 바꿀 수 없어요');[Q[i-1],Q[i]]=[Q[i],Q[i-1]];renderEditor();setDirty()}
+  if(act==='del'){if(R&&R.phase!=='lobby'&&R.phase!=='ended')return toast('게임 중에는 삭제할 수 없어요');if(Q.length>1&&confirm(`R${i+1}을 삭제할까요?`)){Q.splice(i,1);renderEditor();setDirty()}}};
+$('applyN').onclick=()=>{const n=Math.max(1,Math.min(200,Math.round(+$('nRounds').value)||1));
+  if(n<Q.length&&!confirm(`R${n+1}~R${Q.length}를 지울까요?`))return;
+  const last=Q[Q.length-1]||blank();while(Q.length<n)Q.push({...blank(),a:last.a||'O',b:last.b||'X',t:last.t||''});Q.length=n;renderEditor();setDirty()};
+$('addR').onclick=()=>{const last=Q[Q.length-1]||blank();Q.push({...blank(),a:last.a||'O',b:last.b||'X',t:last.t||''});renderEditor();setDirty();
+  document.querySelector('.rc:last-child textarea').focus()};
+$('applyPreset').onclick=()=>{const p=PRESETS[+$('allPreset').value];if(!p)return;Q.forEach(x=>{x.a=p[0];x.b=p[1]});renderEditor();setDirty()};
+$('applyT').onclick=()=>{const t=Math.round(+$('allT').value);if(!t)return;Q.forEach(x=>x.t=t);renderEditor();setDirty()};
+async function save(silent){
+  const bad=Q.map((x,i)=>validItem(x)?0:i+1).filter(Boolean);
+  if(bad.length&&!silent&&!confirm(`R${bad.join(', R')}는 비어 있거나 정답이 없어요. 그래도 저장할까요? (진행 전에 꼭 채워 주세요)`))return false;
+  try{const items=cleanItems(Q);await db.set(rp('/quiz/list'),{items});await up({qTotal:items.length});savedJSON=JSON.stringify(items);setDirty();if(!silent)toast(`${items.length}라운드 저장했어요 ✅`,1);return true}
+  catch(e){toast('저장 실패: '+e.message);return false}
+}
+$('saveBtn').onclick=$('saveBtn2').onclick=()=>save(false);
+addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+
+// CSV: 문제, 왼쪽, 오른쪽, 정답(왼쪽/오른쪽 또는 선택지 글자), 제한시간, 해설
+function parseCSV(t){const rows=[];let row=[],f='',q=false;for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}else if(c==='"')q=true;else if(c===','){row.push(f);f=''}
+  else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f=''}else f+=c}
+  if(f||row.length){row.push(f);rows.push(row)}return rows}
+$('csv').onchange=async e=>{const file=e.target.files[0];if(!file)return;const rows=parseCSV((await file.text()).replace(/^﻿/,'')).filter(r=>r[0]&&r[0].trim()&&r[0].trim()!=='문제');
+  const items=rows.map(r=>{const [q,a,b,ans,t,ex]=r.map(v=>(v||'').trim());const A=/^(a|왼|왼쪽|1)$/i.test(ans)||ans===a?'A':/^(b|오|오른쪽|2)$/i.test(ans)||ans===b?'B':'';return {q,a:a||'O',b:b||'X',ans:A,t:+t||'',e:ex||''}});
+  if(!items.length)return toast('불러올 문제가 없어요');
+  if(!confirm(`${items.length}개 라운드를 불러와서 지금 목록을 바꿀까요?`))return;
+  Q=items;renderEditor();setDirty();toast('불러왔어요. 저장을 눌러야 적용돼요',1);e.target.value=''};
+$('csvOut').onclick=()=>{const csv='﻿문제,왼쪽,오른쪽,정답,제한시간,해설\n'+cleanItems(Q).map(x=>[x.q,x.a,x.b,x.ans==='A'?'왼쪽':x.ans==='B'?'오른쪽':'',x.t,x.e].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`quiz-${room}.csv`;a.click()};
+
+// ---------- 시작 ----------
+if(!room){landing()}
+else if(!(await db.get(`rooms/${room}`))&&!(KEY&&await makeRoom(room,KEY,(recentRooms().find(x=>x.r===room)||{}).title||'').then(()=>true,()=>false))){landing(`방 ${room}을(를) 찾을 수 없어요`)}
+else if(!(await becomeHost(room,KEY))){landing('마스터 권한이 없어요. 마스터 QR로 다시 들어와 주세요')}
+else start();
+</script>
+</body></html>

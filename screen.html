@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>서바이벌 퀴즈 · 대형화면</title>
+<link rel="stylesheet" href="/common.css">
+<script src="/config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+body{overflow:hidden;background:radial-gradient(ellipse at 50% -20%,#353e66,var(--bg) 60%)}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;padding:2vh 2vw;gap:1.5vh}
+header{display:flex;align-items:center;gap:2vw;min-height:15vh}
+.qno{font-family:'Black Han Sans';font-size:3.4vh;background:var(--gold);color:#2a2100;padding:.6vh 1.4vw;border-radius:1vh;white-space:nowrap}
+.qtext{flex:1;font-size:5vh;font-weight:900;line-height:1.3;word-break:keep-all}
+.clock{font-family:'Black Han Sans';font-size:9vh;width:14vh;height:14vh;border-radius:50%;display:grid;place-items:center;background:var(--panel);border:.6vh solid var(--gold);flex:none;overflow:hidden}
+.clock.low{border-color:var(--x);color:var(--x);animation:pulse .5s infinite alternate}
+@keyframes pulse{to{transform:scale(1.07)}}
+.statbar{display:flex;justify-content:space-between;align-items:center;font-size:2.4vh;color:var(--muted)}
+.statbar b{color:var(--text)}
+#field{flex:1;position:relative;display:flex;border-radius:2vh;overflow:hidden;border:2px solid var(--line)}
+.zone{flex:1;position:relative;display:grid;place-items:center;transition:background .3s,filter .3s;overflow:hidden}
+.zone.a{background:var(--o-soft)} .zone.b{background:var(--x-soft)}
+.zone .big{opacity:.2;max-width:90%}
+.zone .big .sym{font-size:38vh}.zone .big .word{font-size:min(14vh,calc(40vw / var(--n)))}
+.zone .zc{position:absolute;top:1.2vh;font-size:4vh;font-family:'Black Han Sans'}
+.zone.a .zc{color:var(--o)} .zone.b .zc{color:var(--x)}
+.mid{flex:0 0 12%;background:rgba(0,0,0,.18);border-left:.5vh dashed var(--gold);border-right:.5vh dashed var(--gold)}
+#field.lobby .zone.a,#field.lobby .zone.b{flex:0 0 0;opacity:0}#field.lobby .mid{flex:1}
+#field.rev-A .zone.b,#field.rev-B .zone.a{filter:grayscale(1) brightness(.45)}
+#field.rev-A .zone.a .big,#field.rev-B .zone.b .big{opacity:.45}
+.av{position:absolute;border-radius:50%;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:left .6s cubic-bezier(.3,1.3,.5,1),top .6s cubic-bezier(.3,1.3,.5,1),opacity .5s,transform .5s;z-index:2}
+.av b{position:absolute;top:100%;margin-top:2px;font-size:12px;white-space:nowrap;background:rgba(0,0,0,.6);padding:0 5px;border-radius:5px;font-weight:700;max-width:90px;overflow:hidden;text-overflow:ellipsis}
+.av.dead{opacity:.35;filter:grayscale(1);transform:scale(.8)}
+.av.dead::after{content:'💀';position:absolute;font-size:.7em;right:-6px;top:-8px}
+.ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:10;text-align:center;flex-direction:column;gap:2vh}
+.ov.on{display:flex}
+#stamp{line-height:1;text-shadow:0 1vh 4vh rgba(0,0,0,.6);animation:stamp .5s cubic-bezier(.2,1.6,.4,1)}
+#stamp .sym{font-size:40vh}#stamp .word{font-size:min(18vh,calc(80vw / var(--n)));background:rgba(0,0,0,.55);padding:2vh 4vw;border-radius:3vh;display:inline-block}
+@keyframes stamp{from{transform:scale(2.4);opacity:0}}
+.revInfo{background:rgba(0,0,0,.7);padding:1.5vh 3vw;border-radius:2vh;font-size:3vh;line-height:1.5}
+#lobbyBox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;gap:5vw;padding:4vh 4vw;z-index:20;background:radial-gradient(ellipse at 50% -20%,#353e66,var(--bg) 60%)}
+#lobbyBox.on{display:flex}
+.lobL{display:flex;flex-direction:column;align-items:center;gap:2vh}
+.qrwrap{background:#fff;padding:2vh;border-radius:2vh;box-shadow:0 2vh 6vh rgba(0,0,0,.4)}
+#qr img,#qr canvas{width:44vh!important;height:44vh!important;display:block}
+.url{font-size:2.6vh;color:var(--gold);font-weight:700;word-break:break-all;text-align:center}
+.lobR{flex:1;max-width:58vw;display:flex;flex-direction:column;gap:2vh;height:100%;justify-content:center}
+.lobTitle{font-size:10vh;line-height:1.05}
+.lobCount{font-size:4vh}.lobCount b{color:var(--gold);font-size:7vh;font-family:'Black Han Sans'}
+.crowd{display:flex;flex-wrap:wrap;gap:.8vh;max-height:42vh;overflow:hidden;align-content:flex-start}
+.crowd span{background:var(--panel);border-radius:99px;padding:.5vh 1.2vw;font-size:2.2vh;animation:pop .4s}
+@keyframes pop{from{transform:scale(0)}}
+.miniQR{position:fixed;right:1.2vw;bottom:1.2vh;background:#fff;padding:.8vh;border-radius:1vh;z-index:15;display:none}
+.miniQR.on{display:block}
+#miniqr img,#miniqr canvas{width:13vh!important;height:13vh!important;display:block}
+#end{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:3vh;z-index:25;background:radial-gradient(circle,#4a3f10,var(--bg) 70%)}
+#end.on{display:flex}
+.endT{font-size:12vh;color:var(--gold)}
+.champ{display:flex;flex-wrap:wrap;gap:1.5vh;justify-content:center;max-width:90vw;max-height:60vh;overflow:auto}
+.champ div{background:var(--panel);border:3px solid var(--gold);border-radius:2vh;padding:1.5vh 2vw;font-size:3.4vh;font-weight:900;animation:pop .5s backwards}
+.champ.solo div{font-size:9vh;padding:3vh 5vw}
+</style>
+</head><body>
+<div class="boot" id="boot">연결 중…</div>
+
+<div id="lobbyBox">
+  <div class="lobL"><div class="qrwrap"><div id="qr"></div></div><div class="url" id="url"></div></div>
+  <div class="lobR">
+    <div class="title lobTitle" id="lobTitle">서바이벌 퀴즈</div>
+    <div class="lobCount">QR 찍고 참가하세요 · 현재 <b id="lobN">0</b>명</div>
+    <div class="crowd" id="crowd"></div>
+  </div>
+</div>
+<div id="end"><div class="title endT" id="endT">🏆 최종 생존자</div><div class="champ" id="champ"></div></div>
+
+<div id="app">
+  <header><div class="qno" id="qno">R1</div><div class="qtext" id="qtext"></div><div class="clock" id="clock">10</div></header>
+  <div class="statbar"><span>생존 <b id="sAlive">0</b> / <b id="sTotal">0</b>명</span><span id="sMsg"></span></div>
+  <div id="field">
+    <div class="zone a" id="zA"><span class="big" id="bigA"></span><span class="zc" id="zcA"></span></div>
+    <div class="mid" id="zM"></div>
+    <div class="zone b" id="zB"><span class="big" id="bigB"></span><span class="zc" id="zcB"></span></div>
+    <div class="ov" id="ovRev"><div id="stamp"></div><div class="revInfo" id="revInfo"></div></div>
+  </div>
+</div>
+<div class="miniQR" id="mini"><div id="miniqr"></div></div>
+
+<script type="module">
+import { initDB, qs, esc, labelHTML, makeClock, qrInto, withMock } from '/db.js';
+const $=id=>document.getElementById(id);
+const room=(qs.get('r')||'').toUpperCase();
+if(!room){$('boot').textContent='주소에 방 코드가 없어요. 마스터 화면의 "대형화면 열기" 버튼으로 열어 주세요';throw 0}
+let db;try{db=await initDB()}catch(e){$('boot').classList.add('err');$('boot').textContent='연결 실패: '+e.message;throw e}
+$('boot').remove();
+const joinUrl=withMock(location.origin+'/?r='+room);
+$('url').textContent=joinUrl.replace(/^https?:\/\//,'');
+qrInto($('qr'),joinUrl,512);qrInto($('miniqr'),joinUrl,256);
+const clock=makeClock();
+let R=null,P=[],els=new Map(),lastPhase='';
+db.watch(`rooms/${room}`,d=>{R=d;if(R)render()});
+db.watchCol(`rooms/${room}/players`,l=>{P=l;if(R)render()});
+
+const alive=p=>{const d=R.dead||{},rv=R.revived||{};if(d[p.id]!==undefined)return false;if(p.late&&p.g===(R.g||0)&&!rv[p.id])return false;return true};
+const ch=p=>p.round===R.round?p.choice:'';
+
+function render(){
+  const ph=R.phase,lob=ph==='lobby';
+  $('lobbyBox').classList.toggle('on',lob);$('end').classList.toggle('on',ph==='ended');
+  $('mini').classList.toggle('on',!lob&&ph!=='ended'&&R.joinOpen);
+  $('lobTitle').textContent=R.title||'서바이벌 퀴즈';
+  if(lob){$('lobN').textContent=P.length;
+    const c=$('crowd');const k=P.map(p=>p.id).join();if(c.dataset.k!==k){c.dataset.k=k;c.innerHTML=P.slice(-80).map(p=>`<span>${p.avatar} ${esc(p.name)}</span>`).join('')}}
+  if(ph==='ended'){const w=R.winners||[];
+    $('endT').textContent=w.length===1?'🏆 최후의 1인':w.length?`🏆 최종 생존자 ${w.length}명`:'생존자 없음';
+    $('champ').className='champ'+(w.length===1?' solo':'');
+    const h=w.map(([n,a],i)=>`<div style="animation-delay:${Math.min(i*.05,2)}s">${a} ${esc(n)}</div>`).join('');if($('champ').dataset.h!==h){$('champ').dataset.h=h;$('champ').innerHTML=h}}
+  $('qno').textContent=`R${R.qNo||1}`;$('qtext').textContent=R.q||'';
+  const al=P.filter(alive);
+  $('sAlive').textContent=al.length;$('sTotal').textContent=P.length;
+  const bA=labelHTML(R.a||'O','A'),bB=labelHTML(R.b||'X','B');
+  if($('bigA').innerHTML!==bA)$('bigA').innerHTML=bA;if($('bigB').innerHTML!==bB)$('bigB').innerHTML=bB;
+  const showCnt=ph==='question'||ph==='locked'||ph==='reveal';const st=R.stats;
+  const nA=ph==='reveal'&&st?st.a:al.filter(p=>ch(p)==='A').length,nB=ph==='reveal'&&st?st.b:al.filter(p=>ch(p)==='B').length;
+  $('zcA').textContent=showCnt?`${nA}명`:'';$('zcB').textContent=showCnt?`${nB}명`:'';
+  $('field').className=lob?'lobby':ph==='reveal'&&R.ans?'rev-'+R.ans:'';
+  $('ovRev').classList.toggle('on',ph==='reveal');
+  if(ph==='reveal'&&(lastPhase!=='reveal'||$('stamp').dataset.r!=R.round)){
+    $('stamp').dataset.r=R.round;$('stamp').innerHTML=labelHTML(R.ans==='A'?R.a:R.b,R.ans);
+    $('stamp').style.animation='none';void $('stamp').offsetWidth;$('stamp').style.animation='';}
+  if(ph==='reveal'&&st){const out=st.before-st.survivors;
+    $('revInfo').innerHTML=(R.e?`<div style="color:var(--gold)">💡 ${esc(R.e)}</div>`:'')+(st.saved?'전원 오답! 모두 생존합니다 🙌':`탈락 <b style="color:var(--x)">${out}</b>명 · 생존 <b style="color:var(--ok)">${st.survivors}</b>명`)}
+  lastPhase=ph;layout();
+}
+
+function layout(){
+  if(!R)return;
+  const f=$('field').getBoundingClientRect();
+  const zones={A:$('zA'),B:$('zB'),'':$('zM')};const groups={A:[],B:[],'':[]};
+  for(const p of P){
+    const a=alive(p),diedNow=R.phase==='reveal'&&(R.dead||{})[p.id]===R.round;
+    if(!a&&!diedNow&&R.phase!=='lobby')continue;
+    groups[R.phase==='lobby'?'':ch(p)].push([p,a]);
+  }
+  const seen=new Set();
+  for(const k of ['A','B','']){
+    const z=zones[k].getBoundingClientRect();const list=groups[k];const n=list.length;if(!n||z.width<10)continue;
+    const padT=k?z.height*.1:8,pad=8,w=z.width-pad*2,h=z.height-padT-pad;
+    let s=Math.floor(Math.sqrt(w*h/n));s=Math.max(18,Math.min(R.phase==='lobby'?90:70,Math.min(w,s)));
+    let cols=Math.max(1,Math.floor(w/s)),rows=Math.ceil(n/cols);
+    while(rows*s>h&&s>18){s-=2;cols=Math.max(1,Math.floor(w/s));rows=Math.ceil(n/cols)}
+    const size=Math.floor(s*.82),offX=(w-cols*s)/2,offY=Math.max(0,(h-rows*s)/2);
+    list.forEach(([p,a],i)=>{seen.add(p.id);let el=els.get(p.id);
+      if(!el){el=document.createElement('div');el.className='av';el.innerHTML='<span></span><b></b>';el.style.left=(f.width/2)+'px';el.style.top=(f.height-40)+'px';$('field').appendChild(el);els.set(p.id,el)}
+      el.style.width=el.style.height=size+'px';el.style.fontSize=(size*.6)+'px';el.style.background=p.color;
+      el.firstChild.textContent=p.avatar;el.lastChild.textContent=p.name;el.lastChild.style.display=size>=40?'':'none';
+      el.classList.toggle('dead',!a);
+      const c=i%cols,r=Math.floor(i/cols);
+      el.style.left=(z.left-f.left+pad+offX+c*s+(s-size)/2)+'px';el.style.top=(z.top-f.top+padT+offY+r*s+(s-size)/2)+'px';});
+  }
+  for(const [id,el] of els)if(!seen.has(id)){el.remove();els.delete(id)}
+}
+addEventListener('resize',layout);
+function tick(){if(R){const left=clock(R),q=R.phase==='question';const c=$('clock');
+  const lockedNow=R.phase==='locked'||(q&&left<=0);
+  c.textContent=q&&left>0?Math.ceil(left/1000):R.phase==='reveal'?'💡':'⏱';
+  c.classList.toggle('low',q&&left>0&&left<3500);
+  $('sMsg').textContent=lockedNow?'⏱ 마감! 정답 공개 대기 중':q?'원하는 쪽으로 이동하세요!':''}
+  requestAnimationFrame(tick)}tick();
+</script>
+</body></html>
