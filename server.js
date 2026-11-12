@@ -8,7 +8,9 @@ const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
-const PUB = path.join(__dirname, 'public');
+// 화면 파일은 public 폴더 안에 있어도 되고, server.js 옆(맨 바깥)에 있어도 됩니다.
+const PUB = fs.existsSync(path.join(__dirname, 'public', 'index.html')) ? path.join(__dirname, 'public') : __dirname;
+const FILES = new Set(['index.html', 'host.html', 'screen.html', 'db.js', 'config.js', 'common.css', 'favicon.ico']);
 const DATA = path.join(__dirname, 'data', 'store.json');
 
 // ---------- 저장소 (메모리 + 파일 백업) ----------
@@ -153,8 +155,8 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/health') { res.writeHead(200, { 'Cache-Control': 'no-store' }); return res.end('ok'); }
   const file = ROUTES[url.pathname] || url.pathname.slice(1);
-  const fp = path.normalize(path.join(PUB, file));
-  if (!fp.startsWith(PUB)) { res.writeHead(403); return res.end(); }
+  if (!FILES.has(file)) { res.writeHead(404); return res.end('not found'); }
+  const fp = path.join(PUB, file);
   fs.readFile(fp, (err, data) => {
     if (err) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(fp)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
