@@ -51,10 +51,6 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 .lbls input:nth-child(1){border-color:rgba(47,140,255,.6)}.lbls input:nth-child(2){border-color:rgba(255,77,94,.6)}
 .ansrow{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center}
 .ansbtn{border:2px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px;font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.pics>div{display:flex;align-items:center;gap:6px;min-height:34px}
-.pics img{height:52px;max-width:90px;object-fit:cover;border-radius:8px;background:#fff}
-.ansbtn img{height:22px;vertical-align:middle;border-radius:4px;margin-right:4px}
 .ansbtn.on.A{background:var(--o);border-color:var(--o)}.ansbtn.on.B{background:var(--x);border-color:var(--x)}
 .mini{display:grid;grid-template-columns:auto 90px 1fr;gap:8px;align-items:center}
 .pl{max-height:460px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
@@ -153,8 +149,7 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 <div id="bar" style="display:none"><div class="st" id="barSt"></div><div id="barBtn"></div></div>
 
 <script type="module">
-import { initDB, DEL, NOW, qs, esc, labelHTML, makeClock, qrInto, withMock, uploadImage, ensureImages } from '/db.js';
-const nm=(t,s)=>t||(s==='A'?'왼쪽':'오른쪽');
+import { initDB, DEL, NOW, qs, esc, labelHTML, makeClock, qrInto, withMock } from '/db.js';
 const $=id=>document.getElementById(id);
 const PRESETS=[['O','X'],['파랑','빨강'],['예','아니오'],['맞다','아니다'],['A','B'],['1번','2번']];
 const SAMPLE=[
@@ -229,7 +224,6 @@ async function start(){
   const ql=await db.get(rp('/quiz/list'));
   Q=(ql?.items||[]).map(x=>({...x}));if(!Q.length)Q=[blank()];
   savedJSON=JSON.stringify(cleanItems(Q));renderEditor();
-  ensureImages(Q.flatMap(x=>[x.ia,x.ib]),room).then(n=>n&&toast(`사진 ${n}장을 서버에 다시 올렸어요`,1));
   db.watch(rp(),d=>{if(!d)return;R=d;render()});
   db.watchCol(rp('/players'),l=>{P=l;if(R)render()});
 }
@@ -244,10 +238,10 @@ function render(){
   $('nQ').textContent=R.qNo||0;$('nQT').textContent=Q.length;
   const inQ=R.phase!=='lobby'&&R.phase!=='ended';
   const nA=al.filter(p=>ch(p)==='A').length,nB=al.filter(p=>ch(p)==='B').length;
-  $('pCnt').innerHTML=inQ?`${esc(nm(R.a,'A'))} <b>${nA}</b> · ${esc(nm(R.b,'B'))} <b>${nB}</b> · 미선택 <b>${al.length-nA-nB}</b>`:'선택 -';
+  $('pCnt').innerHTML=inQ?`${esc(R.a)} <b>${nA}</b> · ${esc(R.b)} <b>${nB}</b> · 미선택 <b>${al.length-nA-nB}</b>`:'선택 -';
   const q=Q[R.qIdx];
   if(inQ){$('curQ').textContent=`R${R.qNo}. ${R.q}`;
-    $('curA').innerHTML=q?`정답 <b class="${q.ans==='A'?'mark-a':'mark-b'}">${esc(nm(q.ans==='A'?q.a:q.b,q.ans))}</b>${q.e?' · '+esc(q.e):''}`:''}
+    $('curA').innerHTML=q?`정답 <b class="${q.ans==='A'?'mark-a':'mark-b'}">${esc(q.ans==='A'?q.a:q.b)}</b>${q.e?' · '+esc(q.e):''}`:''}
   else{$('curQ').textContent=R.phase==='ended'?'게임이 끝났어요':'대기 중 — 참가자가 다 들어오면 첫 라운드를 시작하세요';$('curA').textContent=''}
   const hasNext=Q.some((_,i)=>!(R.used||[]).includes(i));
   let h='',bar='';
@@ -255,7 +249,7 @@ function render(){
   if(R.phase==='question'&&!locked){h=`<button class="btn pri" data-c="lock">⏹ 지금 마감</button><div class="row"><button class="btn grow" data-c="extend">+5초</button><button class="btn grow a" data-c="reveal">바로 정답 공개</button></div>`;bar=`<button class="btn pri" data-c="reveal">💡 정답 공개</button>`}
   if(locked){h=`<button class="btn pri" data-c="reveal">💡 정답 공개</button>`;bar=h}
   if(R.phase==='reveal'){const st=R.stats||{};
-    h=`<div class="muted">${esc(nm(R.a,'A'))} ${st.a}명 · ${esc(nm(R.b,'B'))} ${st.b}명 · 미선택 ${st.none}명 → 생존 <b style="color:var(--ok)">${st.survivors}</b>명${st.saved?' (전원 오답이라 모두 생존)':''}</div>
+    h=`<div class="muted">${esc(R.a)} ${st.a}명 · ${esc(R.b)} ${st.b}명 · 미선택 ${st.none}명 → 생존 <b style="color:var(--ok)">${st.survivors}</b>명${st.saved?' (전원 오답이라 모두 생존)':''}</div>
     <button class="btn pri" data-c="next" ${hasNext?'':'disabled'}>▶ 다음 라운드</button>
     <div class="row"><button class="btn grow" data-c="reviveLast">방금 탈락자 부활</button><button class="btn grow b" data-c="end">🏁 게임 종료 · 우승자 발표</button></div>`;
     bar=hasNext?`<button class="btn pri" data-c="next">▶ 다음 라운드</button>`:`<button class="btn pri b" data-c="end">🏁 종료</button>`}
@@ -283,15 +277,14 @@ async function cmd(c){
   if(c==='end'){if(!confirm('게임을 끝내고 현재 생존자를 우승자로 발표할까요?'))return;
     return up({phase:'ended',winners:P.filter(alive).slice(0,300).map(p=>[p.name,p.avatar])})}
   if(c==='reset'){if(!confirm('처음부터 다시 할까요? (참가자 유지, 모두 생존)'))return;
-    return up({phase:'lobby',g:(R.g||0)+1,dead:{},revived:{},used:[],qNo:0,qIdx:-1,q:'',ans:null,e:'',stats:null,winners:null,a:'O',b:'X',ia:'',ib:''})}
+    return up({phase:'lobby',g:(R.g||0)+1,dead:{},revived:{},used:[],qNo:0,qIdx:-1,q:'',ans:null,e:'',stats:null,winners:null,a:'O',b:'X'})}
 }
 async function startRound(idx){
   const q=Q[idx];if(!validItem(q)){toast(`R${idx+1} 내용을 채워 주세요 (문제·선택지·정답)`);return}
   if(dirty&&!(await save(true)))return;
-  if(q.ia||q.ib)await ensureImages([q.ia,q.ib],room);
   if(!['lobby','reveal'].includes(R.phase)&&!confirm('진행 중인 라운드를 건너뛰고 이 라운드를 시작할까요?'))return;
   const used=(R.used||[]).includes(idx)?R.used:[...(R.used||[]),idx];
-  await up({phase:'question',round:(R.round||0)+1,q:q.q,a:q.a,b:q.b,ia:q.ia||'',ib:q.ib||'',ans:null,e:'',dur:Number(q.t)||R.defaultDur||10,
+  await up({phase:'question',round:(R.round||0)+1,q:q.q,a:q.a,b:q.b,ans:null,e:'',dur:Number(q.t)||R.defaultDur||10,
     startedAt:NOW,startedKey:Math.random().toString(36).slice(2,8),qIdx:idx,used,qNo:used.length,qTotal:Q.length,stats:null});
   scrollTo({top:0,behavior:'smooth'});
 }
@@ -335,7 +328,7 @@ function renderP(){
   const k=$('search').value.trim();
   const list=P.filter(p=>!k||p.name.includes(k)).map(p=>[p,alive(p)]).sort((x,y)=>y[1]-x[1]||x[0].name.localeCompare(y[0].name)).slice(0,300);
   const h=list.map(([p,a])=>{const c=ch(p);return `<div class="pi ${a?'':'dead'}">${p.avatar}<span class="nm">${esc(p.name)}</span>
-    ${c&&R.phase!=='lobby'?`<b class="${c==='A'?'mark-a':'mark-b'}" style="font-size:12px">${esc(nm(c==='A'?R.a:R.b,c))}</b>`:''}
+    ${c&&R.phase!=='lobby'?`<b class="${c==='A'?'mark-a':'mark-b'}" style="font-size:12px">${esc(c==='A'?R.a:R.b)}</b>`:''}
     ${a?`<button class="btn sm" data-a="eliminate" data-id="${p.id}">탈락</button>`:`<button class="btn sm ok" data-a="revive" data-id="${p.id}">부활</button>`}
     <button class="btn sm" data-a="kick" data-id="${p.id}" title="퇴장">✕</button></div>`}).join('')||'<div class="muted">아직 참가자가 없어요. 참가자용 QR을 띄워 주세요</div>';
   if($('pl').dataset.h!==h){$('pl').innerHTML=h;$('pl').dataset.h=h}
@@ -347,10 +340,8 @@ $('pl').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;cons
 
 // ---------- 라운드 편집 ----------
 function cleanItems(list){return list.map(x=>({q:String(x.q||'').trim().slice(0,300),a:String(x.a||'').trim().slice(0,20),b:String(x.b||'').trim().slice(0,20),
-  ia:String(x.ia||''),ib:String(x.ib||''),ans:x.ans==='A'||x.ans==='B'?x.ans:'',t:Math.max(0,Math.min(300,Math.round(+x.t||0)))||'',e:String(x.e||'').trim().slice(0,200)}))}
-const validItem=x=>x&&String(x.q).trim()&&(String(x.a).trim()||x.ia)&&(String(x.b).trim()||x.ib)&&(x.ans==='A'||x.ans==='B');
-const ansLabel=(x,s)=>{const im=s==='A'?x.ia:x.ib,t=s==='A'?x.a:x.b;return (im?`<img src="${esc(im)}">`:'')+esc(t||(im?'사진':s==='A'?'왼쪽':'오른쪽'))};
-const picCell=(x,s)=>{const im=s==='A'?x.ia:x.ib;return im?`<img src="${esc(im)}"><button class="btn sm" data-act="rm${s}">✕ 사진 빼기</button>`:`<label class="btn sm">📷 사진 넣기<input type="file" accept="image/*" data-img="${s}" hidden></label><span class="muted">(선택)</span>`};
+  ans:x.ans==='A'||x.ans==='B'?x.ans:'',t:Math.max(0,Math.min(300,Math.round(+x.t||0)))||'',e:String(x.e||'').trim().slice(0,200)}))}
+const validItem=x=>x&&String(x.q).trim()&&String(x.a).trim()&&String(x.b).trim()&&(x.ans==='A'||x.ans==='B');
 const presetOpts=PRESETS.map((p,i)=>`<option value="${i}">${p[0]} / ${p[1]}</option>`).join('');
 $('allPreset').innerHTML+=presetOpts;
 
@@ -362,8 +353,7 @@ function renderEditor(){
       <button class="btn sm" data-act="go">▶ 출제</button><button class="btn sm" data-act="up" title="위로">↑</button><button class="btn sm" data-act="del" title="삭제">🗑</button></div>
     <textarea data-f="q" rows="2" placeholder="문제를 입력하세요">${esc(x.q)}</textarea>
     <div class="lbls"><input data-f="a" placeholder="왼쪽 선택지 (예: O, 파랑)" value="${esc(x.a)}"><input data-f="b" placeholder="오른쪽 선택지 (예: X, 빨강)" value="${esc(x.b)}"></div>
-    <div class="pics"><div data-pic="A">${picCell(x,'A')}</div><div data-pic="B">${picCell(x,'B')}</div></div>
-    <div class="ansrow"><span class="muted">정답</span><button class="ansbtn A ${x.ans==='A'?'on':''}" data-ans="A">${ansLabel(x,'A')}</button><button class="ansbtn B ${x.ans==='B'?'on':''}" data-ans="B">${ansLabel(x,'B')}</button></div>
+    <div class="ansrow"><span class="muted">정답</span><button class="ansbtn A ${x.ans==='A'?'on':''}" data-ans="A">${esc(x.a||'왼쪽')}</button><button class="ansbtn B ${x.ans==='B'?'on':''}" data-ans="B">${esc(x.b||'오른쪽')}</button></div>
     <div class="mini"><span class="muted">타이머</span><input data-f="t" type="number" min="3" max="300" placeholder="기본" value="${esc(x.t)}"><input data-f="e" placeholder="해설 (선택, 정답 공개 때 표시)" value="${esc(x.e)}"></div>
   </div>`).join('');
   markRounds();validateAll();
@@ -380,23 +370,14 @@ function setDirty(){dirty=JSON.stringify(cleanItems(Q))!==savedJSON;$('dirty').t
 $('rounds').oninput=e=>{const el=e.target.closest('[data-f]');if(!el)return;const card=el.closest('.rc'),i=+card.dataset.i,f=el.dataset.f;
   if(f==='preset'){const p=PRESETS[+el.value];if(p){Q[i].a=p[0];Q[i].b=p[1];card.querySelector('[data-f=a]').value=p[0];card.querySelector('[data-f=b]').value=p[1]}el.value=''}
   else Q[i][f]=el.value;
-  if(f==='a'||f==='b'||f==='preset'){card.querySelector('.ansbtn.A').innerHTML=ansLabel(Q[i],'A');card.querySelector('.ansbtn.B').innerHTML=ansLabel(Q[i],'B')}
+  if(f==='a'||f==='b'||f==='preset'){card.querySelector('.ansbtn.A').textContent=Q[i].a||'왼쪽';card.querySelector('.ansbtn.B').textContent=Q[i].b||'오른쪽'}
   card.classList.toggle('bad',!validItem(Q[i]));setDirty()};
 $('rounds').onclick=e=>{const card=e.target.closest('.rc');if(!card)return;const i=+card.dataset.i;
   const ab=e.target.closest('[data-ans]');if(ab){Q[i].ans=ab.dataset.ans;card.querySelectorAll('.ansbtn').forEach(b=>b.classList.toggle('on',b===ab));card.classList.toggle('bad',!validItem(Q[i]));setDirty();return}
   const act=e.target.closest('[data-act]')?.dataset.act;
-  if(act==='rmA'||act==='rmB'){const s=act.slice(2);Q[i][s==='A'?'ia':'ib']='';refreshPic(card,i);return}
   if(act==='go')startRound(i);
   if(act==='up'&&i>0){if(R&&R.phase!=='lobby'&&R.phase!=='ended')return toast('게임 중에는 순서를 바꿀 수 없어요');[Q[i-1],Q[i]]=[Q[i],Q[i-1]];renderEditor();setDirty()}
   if(act==='del'){if(R&&R.phase!=='lobby'&&R.phase!=='ended')return toast('게임 중에는 삭제할 수 없어요');if(Q.length>1&&confirm(`R${i+1}을 삭제할까요?`)){Q.splice(i,1);renderEditor();setDirty()}}};
-function refreshPic(card,i){for(const s of ['A','B'])card.querySelector(`[data-pic=${s}]`).innerHTML=picCell(Q[i],s);
-  card.querySelector('.ansbtn.A').innerHTML=ansLabel(Q[i],'A');card.querySelector('.ansbtn.B').innerHTML=ansLabel(Q[i],'B');
-  card.classList.toggle('bad',!validItem(Q[i]));setDirty()}
-$('rounds').addEventListener('change',async e=>{const inp=e.target.closest('[data-img]');if(!inp||!inp.files[0])return;
-  const card=inp.closest('.rc'),i=+card.dataset.i,s=inp.dataset.img,cell=card.querySelector(`[data-pic=${s}]`);
-  cell.innerHTML='<span class="muted">올리는 중…</span>';
-  try{Q[i][s==='A'?'ia':'ib']=await uploadImage(inp.files[0],room);toast('사진을 넣었어요. 저장을 눌러 주세요',1)}catch(err){toast(err.message)}
-  refreshPic(card,i)});
 $('applyN').onclick=()=>{const n=Math.max(1,Math.min(200,Math.round(+$('nRounds').value)||1));
   if(n<Q.length&&!confirm(`R${n+1}~R${Q.length}를 지울까요?`))return;
   const last=Q[Q.length-1]||blank();while(Q.length<n)Q.push({...blank(),a:last.a||'O',b:last.b||'X',t:last.t||''});Q.length=n;renderEditor();setDirty()};

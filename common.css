@@ -20,7 +20,3 @@ button{font-family:inherit;cursor:pointer}
 .mark-a.word,.mark-b.word{white-space:nowrap;font-family:'Black Han Sans','Noto Sans KR',sans-serif;line-height:1.1;word-break:keep-all;text-align:center}
 .boot{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);z-index:90;background:var(--bg)}
 .boot.err{color:var(--x)}
-
-.pic{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.35em;max-width:100%;max-height:100%;min-height:0}
-.pic img{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:14px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.35);-webkit-user-drag:none;pointer-events:none}
-.pic b{font-family:'Black Han Sans','Noto Sans KR',sans-serif;font-weight:400;white-space:nowrap;line-height:1.1}
