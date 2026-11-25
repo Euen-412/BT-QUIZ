@@ -58,7 +58,7 @@ async function firebaseApi() {
 function serverApi() {
   let tok = localStorage.getItem('q_tok');
   if (!tok) { tok = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('q_tok', tok); }
-  let ws, seq = 0, uid = null, retry = 0;
+  let ws, seq = 0, uid = null, retry = 0, masterWait = null;
   const pending = new Map(), subs = new Map(), queue = [];
   const banner = on => {
     let el = document.getElementById('connBanner');
@@ -74,10 +74,12 @@ function serverApi() {
       const m = JSON.parse(e.data);
       if (m.t === 'hi') {
         uid = m.uid; api.uid = uid; retry = 0; banner(false); readyRes();
+        if (api._pw) ws.send(JSON.stringify({ t: 'master', pw: api._pw }));  // 재연결/서버 재시작 후 마스터 권한 자동 복구
         for (const [sid, s] of subs) ws.send(JSON.stringify({ t: 'sub', sid, path: s.path, col: s.col }));
         while (queue.length) ws.send(JSON.stringify(queue.shift()));
         return;
       }
+      if (m.t === 'master') { const f = masterWait; masterWait = null; f && f(m); return; }
       if (m.t === 'res') { const p = pending.get(m.id); if (!p) return; pending.delete(m.id); m.err ? p.rej(Object.assign(new Error(m.err), { code: m.err })) : p.res(m.data); return; }
       const s = subs.get(m.sid); if (!s) return;
       if (m.t === 'snap') s.cb(m.data);
@@ -107,6 +109,7 @@ function serverApi() {
     del: p => op('del', p),
     watch: (p, cb, err) => sub(p, false, cb, err),
     watchCol: (p, cb, err) => sub(p, true, cb, err),
+    master: pw => new Promise(res => { masterWait = m => { if (m.ok) api._pw = pw; res(m); }; raw({ t: 'master', pw }); }),
   };
   connect();
   return api;
@@ -151,6 +154,16 @@ function mockApi() {
       subs.add(f); setTimeout(f); return () => subs.delete(f);
     },
   };
+  api.master = async pw => {
+    const saved = localStorage.getItem('mock_pw');
+    if (!saved && pw.length >= 4) localStorage.setItem('mock_pw', pw);
+    const ok = (localStorage.getItem('mock_pw') || '') === pw;
+    if (ok) {
+      if (!store['rooms/MAIN']) { store['rooms/MAIN'] = { owner: 'server', title: '', phase: 'lobby', round: 0, g: 0, q: '', a: 'O', b: 'X', ia: '', ib: '', ans: null, e: '', dur: 10, defaultDur: 10, startedAt: Date.now(), startedKey: '', qIdx: -1, used: [], qNo: 0, qTotal: 0, stats: null, dead: {}, revived: {}, joinOpen: true, allWrongSurvive: true, winners: null }; store['rooms/MAIN/quiz/list'] = { items: [], savedAt: 0 }; }
+      store['rooms/MAIN/hosts/' + uid] = { at: Date.now() }; save();
+    }
+    return { ok, created: !saved && ok };
+  };
   window.__mock = api;
   return api;
 }
@@ -161,9 +174,10 @@ export const qs = new URLSearchParams(location.search);
 export function withMock(url) { return MOCK ? url + (url.includes('?') ? '&' : '?') + 'mock=1' : url; }
 
 // 라벨 표시: O/X 같은 한 글자는 큰 기호로, 나머지는 글자로
-export function labelHTML(t, side, cls = '') {
+export function labelHTML(t, side, cls = '', img = '') {
   const c = side === 'A' ? 'mark-a' : 'mark-b';
   const s = String(t ?? '');
+  if (img) return `<span class="pic ${c} ${cls}"><img src="${esc(img)}" alt="" draggable="false">${s ? `<b>${esc(s)}</b>` : ''}</span>`;
   const n = Math.max(1, [...s].length);
   return `<span class="${c} ${n === 1 ? 'sym' : 'word'} ${cls}" style="--n:${n}">${esc(s)}</span>`;
 }
@@ -183,4 +197,44 @@ export function qrInto(el, text, size) {
   el.innerHTML = '';
   try { new QRCode(el, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M }); }
   catch (_) { el.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=0&data=${encodeURIComponent(text)}">`; }
+}
+
+// ---------- 사진 업로드 ----------
+// 폰 사진도 가볍게: 긴 변 720px JPEG로 줄여서 올림. 마스터 기기(IndexedDB)에도 보관해서
+// 서버가 잠들었다 깨어나 사진이 없어져도 자동으로 다시 올림.
+const IDB = () => new Promise((res, rej) => { const r = indexedDB.open('quizimg', 1); r.onupgradeneeded = () => r.result.createObjectStore('b'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+async function idbPut(k, v) { try { const db = await IDB(); await new Promise(r => { const t = db.transaction('b', 'readwrite'); t.objectStore('b').put(v, k); t.oncomplete = r; t.onerror = r; }); } catch (_) {} }
+async function idbGet(k) { try { const db = await IDB(); return await new Promise(r => { const q = db.transaction('b').objectStore('b').get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(null); }); } catch (_) { return null; } }
+
+async function shrink(file) {
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) throw new Error('사진을 읽을 수 없어요');
+  const k = Math.min(1, 720 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.82));
+}
+async function send(blob, room) {
+  const r = await fetch('/upload?r=' + encodeURIComponent(room), { method: 'POST', headers: { 'x-token': localStorage.getItem('q_tok') || '' }, body: blob });
+  if (!r.ok) throw new Error(r.status === 403 ? '마스터만 사진을 올릴 수 있어요' : '사진 올리기 실패 (' + r.status + ')');
+  return (await r.json()).url;
+}
+export async function uploadImage(file, room) {
+  const blob = await shrink(file);
+  if (MOCK) return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+  const url = await send(blob, room);
+  await idbPut(url, blob);
+  return url;
+}
+// 서버에 사진이 없으면(서버 재시작 등) 이 기기에 보관된 사진으로 다시 올림
+export async function ensureImages(urls, room) {
+  if (MOCK) return 0;
+  let fixed = 0;
+  for (const u of new Set(urls.filter(u => u && u.startsWith('/img/')))) {
+    const h = await fetch(u, { method: 'HEAD' }).catch(() => null);
+    if (h && h.ok) continue;
+    const blob = await idbGet(u);
+    if (blob) { try { await send(blob, room); fixed++; } catch (_) {} }
+  }
+  return fixed;
 }

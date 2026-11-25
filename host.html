@@ -51,6 +51,10 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 .lbls input:nth-child(1){border-color:rgba(47,140,255,.6)}.lbls input:nth-child(2){border-color:rgba(255,77,94,.6)}
 .ansrow{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center}
 .ansbtn{border:2px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px;font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pics>div{display:flex;align-items:center;gap:6px;min-height:34px}
+.pics img{height:52px;max-width:90px;object-fit:cover;border-radius:8px;background:#fff}
+.ansbtn img{height:22px;vertical-align:middle;border-radius:4px;margin-right:4px}
 .ansbtn.on.A{background:var(--o);border-color:var(--o)}.ansbtn.on.B{background:var(--x);border-color:var(--x)}
 .mini{display:grid;grid-template-columns:auto 90px 1fr;gap:8px;align-items:center}
 .pl{max-height:460px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
@@ -73,10 +77,10 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 
 <div id="landing">
   <div class="title" style="font-size:34px;text-align:center">서바이벌 퀴즈<br><span style="color:var(--gold);font-size:24px">마스터</span></div>
-  <input id="newTitle" placeholder="게임 제목 (선택, 대형화면에 표시)" maxlength="30">
-  <button class="btn pri" id="createBtn">＋ 새 게임방 만들기</button>
-  <div class="muted">다른 기기에서 진행하려면 이 화면이 아니라, 처음 만든 기기에 뜨는 <b>마스터 QR</b>을 찍으세요.</div>
-  <div class="recent" id="recent"></div>
+  <div class="muted" id="landHint" style="text-align:center">마스터 비밀번호를 입력하세요</div>
+  <input id="pwIn" type="password" placeholder="마스터 비밀번호" autocomplete="current-password">
+  <button class="btn pri" id="pwBtn">입장</button>
+  <div class="muted">처음이면 여기에 쓰는 비밀번호가 <b>마스터 비밀번호로 정해져요</b> (4자 이상).<br>어느 기기·링크에서든 이 비밀번호로 들어오면 같은 문제와 같은 게임이 나와요.</div>
   <div class="muted" id="landErr" style="color:var(--x)"></div>
 </div>
 
@@ -84,7 +88,7 @@ textarea{width:100%;resize:vertical;line-height:1.5}
   <!-- 진행 -->
   <div class="card full">
     <div class="status">
-      <span class="pill">방 <b id="pRoom"></b></span>
+      <span class="pill" id="pRoom" style="display:none"></span>
       <span class="pill" id="phase" style="font-weight:900"></span>
       <span class="pill">참가 <b id="nTotal">0</b></span>
       <span class="pill">생존 <b id="nAlive">0</b></span>
@@ -102,7 +106,7 @@ textarea{width:100%;resize:vertical;line-height:1.5}
       <div class="qrb"><b>참가자용</b><div class="qrimg" id="qrP"></div><div class="muted" id="urlP" style="word-break:break-all"></div><button class="btn sm" id="copyP">주소 복사</button></div>
       <div class="qrb"><b style="color:var(--x)">마스터용 🔒</b><div class="qrimg blur" id="qrM"></div>
         <div class="muted">찍으면 그 폰이 이 화면처럼 모든 걸 제어해요.<br>빔프로젝터에 띄우지 마세요!</div>
-        <button class="btn sm" id="showM">마스터 QR 보기</button></div>
+        <div class="row" style="justify-content:center"><button class="btn sm" id="showM">마스터 QR 보기</button><button class="btn sm" id="copyM">마스터 링크 복사</button></div></div>
     </div>
   </div>
 
@@ -129,6 +133,8 @@ textarea{width:100%;resize:vertical;line-height:1.5}
       <span class="grow"></span>
       <label class="btn sm">CSV 불러오기<input type="file" id="csv" accept=".csv,.txt" hidden></label>
       <button class="btn sm" id="csvOut">CSV 내보내기</button>
+      <button class="btn sm" id="fileOut">📦 문제 파일 저장 (사진 포함)</button>
+      <label class="btn sm">📂 문제 파일 불러오기<input type="file" id="fileIn" accept=".json,application/json" hidden></label>
     </div>
     <div class="row muted" style="margin-bottom:12px">
       전체 적용:
@@ -149,7 +155,8 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 <div id="bar" style="display:none"><div class="st" id="barSt"></div><div id="barBtn"></div></div>
 
 <script type="module">
-import { initDB, DEL, NOW, qs, esc, labelHTML, makeClock, qrInto, withMock } from '/db.js';
+import { initDB, DEL, NOW, qs, esc, labelHTML, makeClock, qrInto, withMock, uploadImage, ensureImages } from '/db.js';
+const nm=(t,s)=>t||(s==='A'?'왼쪽':'오른쪽');
 const $=id=>document.getElementById(id);
 const PRESETS=[['O','X'],['파랑','빨강'],['예','아니오'],['맞다','아니다'],['A','B'],['1번','2번']];
 const SAMPLE=[
@@ -163,48 +170,23 @@ function toast(t,good){const el=$('toast');el.textContent=t;el.className=good?'g
 let db;try{db=await initDB()}catch(e){$('boot').classList.add('err');$('boot').textContent='연결 실패: '+e.message;throw e}
 $('boot').remove();
 
-// ---------- 방 입장 ----------
-const recentRooms=()=>{try{return JSON.parse(localStorage.getItem('q_hosts'))||[]}catch(_){return[]}};
-function remember(r,k,title){const l=recentRooms().filter(x=>x.r!==r);l.unshift({r,k,title:title||'',at:Date.now()});localStorage.setItem('q_hosts',JSON.stringify(l.slice(0,8)))}
-let room=(qs.get('r')||'').toUpperCase(), KEY=new URLSearchParams(location.hash.slice(1)).get('k')||'';
-if(room&&!KEY)KEY=(recentRooms().find(x=>x.r===room)||{}).k||'';
-if(room&&KEY){remember(room,KEY);history.replaceState(null,'',withMock('/host?r='+room))}
-
-async function becomeHost(r,k){
-  const h=await db.get(`rooms/${r}/hosts/${db.uid}`).catch(()=>null);
-  if(h)return true;
-  try{await db.set(`rooms/${r}/hosts/${db.uid}`,{key:k});return true}catch(e){return false}
+// ---------- 입장 (게임방은 하나: MAIN) ----------
+const room='MAIN';
+let PW=new URLSearchParams(location.hash.slice(1)).get('pw')||localStorage.getItem('q_pw')||'';
+if(location.hash)history.replaceState(null,'',withMock('/host'));
+function landing(msg){$('landing').classList.add('on');$('landErr').textContent=msg||'';setTimeout(()=>$('pwIn').focus(),50)}
+async function login(pw){
+  const r=await db.master(pw);
+  if(r.ok){localStorage.setItem('q_pw',pw);PW=pw;$('landing').classList.remove('on');if(r.created)toast('마스터 비밀번호를 정했어요. 잊지 마세요!',1);start();return true}
+  localStorage.removeItem('q_pw');landing(pw?'비밀번호가 틀렸어요':'');return false;
 }
-async function landing(msg){
-  $('landing').classList.add('on');$('landErr').textContent=msg||'';
-  const l=recentRooms();
-  $('recent').innerHTML=l.length?'<div class="muted">최근에 연 방</div>'+l.map(x=>`<button class="btn" data-r="${x.r}" data-k="${x.k}">${esc(x.r)} ${x.title?'· '+esc(x.title):''} <span class="muted">${new Date(x.at).toLocaleDateString()}</span></button>`).join(''):'';
-}
-$('recent').onclick=e=>{const b=e.target.closest('[data-r]');if(b)location.href=withMock('/host?r='+b.dataset.r)+'#k='+b.dataset.k};
-const rand=(n,abc)=>Array.from(crypto.getRandomValues(new Uint32Array(n)),v=>abc[v%abc.length]).join('');
-async function makeRoom(code,k,title){
-  let items;try{items=JSON.parse(localStorage.getItem('q_draft'))}catch(_){}
-  if(!Array.isArray(items)||!items.length)items=SAMPLE;
-  await db.create(`rooms/${code}`,{owner:db.uid,title,phase:'lobby',round:0,g:0,q:'',a:'O',b:'X',ans:null,e:'',dur:10,defaultDur:10,
-    startedAt:NOW,startedKey:'',qIdx:-1,used:[],qNo:0,qTotal:items.length,stats:null,dead:{},revived:{},joinOpen:true,allWrongSurvive:true,winners:null,created:NOW});
-  await db.set(`rooms/${code}/hosts/${db.uid}`,{key:''});
-  await db.set(`rooms/${code}/secret/key`,{v:k});
-  await db.set(`rooms/${code}/quiz/list`,{items:cleanItems(items)});
-}
-$('createBtn').onclick=async()=>{
-  $('createBtn').disabled=true;
-  try{
-    let code;for(let i=0;i<5;i++){code=rand(5,'ABCDEFGHJKLMNPQRSTUVWXYZ23456789');if(!(await db.get(`rooms/${code}`)))break}
-    const k=rand(20,'abcdefghijkmnpqrstuvwxyz23456789');
-    const title=$('newTitle').value.trim();
-    await makeRoom(code,k,title);
-    remember(code,k,title);location.href=withMock('/host?r='+code)+'#k='+k;
-  }catch(e){$('landErr').textContent='방 만들기 실패: '+e.message;$('createBtn').disabled=false}
-};
-
-
+$('pwBtn').onclick=()=>{const v=$('pwIn').value.trim();if(v.length<4)return landing('4자 이상 입력해 주세요');login(v)};
+$('pwIn').onkeydown=e=>{if(e.key==='Enter')$('pwBtn').click()};
+// 이 기기에 마지막으로 '저장'한 문제 (서버가 잠들었다 깨서 지워져도 여기서 복구)
+const localSaved=r=>{try{const all=JSON.parse(localStorage.getItem('q_saved'))||{};return r?all[r]:Object.values(all).sort((a,b)=>b.savedAt-a.savedAt)[0]}catch(_){return null}};
+function keepLocal(r,items,savedAt){try{const all=JSON.parse(localStorage.getItem('q_saved'))||{};all[r]={items,savedAt};localStorage.setItem('q_saved',JSON.stringify(all))}catch(_){}}
 // ---------- 마스터 화면 ----------
-let R=null,P=[],Q=[],savedJSON='',dirty=false;
+let R=null,P=[],Q=[],savedJSON='',dirty=false,mySavedAt=0;
 const clock=makeClock();
 const rp=p=>`rooms/${room}${p||''}`;
 const up=patch=>db.update(rp(),patch).catch(e=>toast('저장 실패: '+e.message));
@@ -213,17 +195,29 @@ const ch=p=>p.round===R.round?p.choice:'';
 
 async function start(){
   $('main').style.display='';$('bar').style.display='';$('pRoom').textContent=room;
-  const pUrl=withMock(location.origin+'/?r='+room);
+  const pUrl=withMock(location.origin+'/');
   $('urlP').textContent=pUrl.replace(/^https?:\/\//,'');qrInto($('qrP'),pUrl,340);
-  $('screenLink').href=withMock('/screen?r='+room);
+  $('screenLink').href=withMock('/screen');
   $('copyP').onclick=()=>navigator.clipboard.writeText(pUrl).then(()=>toast('복사했어요',1));
-  const sec=await db.get(rp('/secret/key')).catch(()=>null);
-  const mUrl=withMock(location.origin+'/host?r='+room)+'#k='+(sec?.v||KEY);
+  const mUrl=withMock(location.origin+'/host')+'#pw='+encodeURIComponent(PW);
   qrInto($('qrM'),mUrl,340);
+  $('copyM').onclick=()=>navigator.clipboard.writeText(mUrl).then(()=>toast('마스터 링크를 복사했어요. 같이 진행할 사람에게만 보내세요',1));
   $('showM').onclick=()=>{const b=$('qrM').classList.toggle('blur');$('showM').textContent=b?'마스터 QR 보기':'숨기기'};
-  const ql=await db.get(rp('/quiz/list'));
+  let ql=await db.get(rp('/quiz/list'));
+  const mine=localSaved(room);
+  if(mine&&mine.items?.length&&(!ql||!ql.items?.length||(ql.savedAt||0)<mine.savedAt)){
+    ql={items:mine.items,savedAt:mine.savedAt};
+    await db.set(rp('/quiz/list'),ql).then(()=>up({qTotal:ql.items.length})).catch(()=>{});
+    toast('서버가 재시작돼서, 이 기기에 저장해 둔 문제로 복구했어요 ✅',1);
+  } else if(!ql||!ql.items?.length) toast('서버에 문제가 비어 있어요. 문제를 입력했던 기기로 마스터 화면을 열면 자동으로 복구돼요');
+  mySavedAt=ql?.savedAt||0;
   Q=(ql?.items||[]).map(x=>({...x}));if(!Q.length)Q=[blank()];
   savedJSON=JSON.stringify(cleanItems(Q));renderEditor();
+  // 다른 마스터 기기에서 저장하면 여기에도 반영
+  db.watch(rp('/quiz/list'),d=>{if(!d||(d.savedAt||0)<=mySavedAt)return;mySavedAt=d.savedAt;
+    if(dirty){toast('다른 기기에서 문제를 저장했어요. 내 변경을 저장하면 덮어써요');return}
+    Q=(d.items||[]).map(x=>({...x}));if(!Q.length)Q=[blank()];savedJSON=JSON.stringify(cleanItems(Q));keepLocal(room,d.items,d.savedAt);renderEditor();toast('다른 기기에서 저장한 문제를 불러왔어요',1)});
+  ensureImages(Q.flatMap(x=>[x.ia,x.ib]),room).then(n=>n&&toast(`사진 ${n}장을 서버에 다시 올렸어요`,1));
   db.watch(rp(),d=>{if(!d)return;R=d;render()});
   db.watchCol(rp('/players'),l=>{P=l;if(R)render()});
 }
@@ -238,10 +232,10 @@ function render(){
   $('nQ').textContent=R.qNo||0;$('nQT').textContent=Q.length;
   const inQ=R.phase!=='lobby'&&R.phase!=='ended';
   const nA=al.filter(p=>ch(p)==='A').length,nB=al.filter(p=>ch(p)==='B').length;
-  $('pCnt').innerHTML=inQ?`${esc(R.a)} <b>${nA}</b> · ${esc(R.b)} <b>${nB}</b> · 미선택 <b>${al.length-nA-nB}</b>`:'선택 -';
+  $('pCnt').innerHTML=inQ?`${esc(nm(R.a,'A'))} <b>${nA}</b> · ${esc(nm(R.b,'B'))} <b>${nB}</b> · 미선택 <b>${al.length-nA-nB}</b>`:'선택 -';
   const q=Q[R.qIdx];
   if(inQ){$('curQ').textContent=`R${R.qNo}. ${R.q}`;
-    $('curA').innerHTML=q?`정답 <b class="${q.ans==='A'?'mark-a':'mark-b'}">${esc(q.ans==='A'?q.a:q.b)}</b>${q.e?' · '+esc(q.e):''}`:''}
+    $('curA').innerHTML=q?`정답 <b class="${q.ans==='A'?'mark-a':'mark-b'}">${esc(nm(q.ans==='A'?q.a:q.b,q.ans))}</b>${q.e?' · '+esc(q.e):''}`:''}
   else{$('curQ').textContent=R.phase==='ended'?'게임이 끝났어요':'대기 중 — 참가자가 다 들어오면 첫 라운드를 시작하세요';$('curA').textContent=''}
   const hasNext=Q.some((_,i)=>!(R.used||[]).includes(i));
   let h='',bar='';
@@ -249,7 +243,7 @@ function render(){
   if(R.phase==='question'&&!locked){h=`<button class="btn pri" data-c="lock">⏹ 지금 마감</button><div class="row"><button class="btn grow" data-c="extend">+5초</button><button class="btn grow a" data-c="reveal">바로 정답 공개</button></div>`;bar=`<button class="btn pri" data-c="reveal">💡 정답 공개</button>`}
   if(locked){h=`<button class="btn pri" data-c="reveal">💡 정답 공개</button>`;bar=h}
   if(R.phase==='reveal'){const st=R.stats||{};
-    h=`<div class="muted">${esc(R.a)} ${st.a}명 · ${esc(R.b)} ${st.b}명 · 미선택 ${st.none}명 → 생존 <b style="color:var(--ok)">${st.survivors}</b>명${st.saved?' (전원 오답이라 모두 생존)':''}</div>
+    h=`<div class="muted">${esc(nm(R.a,'A'))} ${st.a}명 · ${esc(nm(R.b,'B'))} ${st.b}명 · 미선택 ${st.none}명 → 생존 <b style="color:var(--ok)">${st.survivors}</b>명${st.saved?' (전원 오답이라 모두 생존)':''}</div>
     <button class="btn pri" data-c="next" ${hasNext?'':'disabled'}>▶ 다음 라운드</button>
     <div class="row"><button class="btn grow" data-c="reviveLast">방금 탈락자 부활</button><button class="btn grow b" data-c="end">🏁 게임 종료 · 우승자 발표</button></div>`;
     bar=hasNext?`<button class="btn pri" data-c="next">▶ 다음 라운드</button>`:`<button class="btn pri b" data-c="end">🏁 종료</button>`}
@@ -277,14 +271,15 @@ async function cmd(c){
   if(c==='end'){if(!confirm('게임을 끝내고 현재 생존자를 우승자로 발표할까요?'))return;
     return up({phase:'ended',winners:P.filter(alive).slice(0,300).map(p=>[p.name,p.avatar])})}
   if(c==='reset'){if(!confirm('처음부터 다시 할까요? (참가자 유지, 모두 생존)'))return;
-    return up({phase:'lobby',g:(R.g||0)+1,dead:{},revived:{},used:[],qNo:0,qIdx:-1,q:'',ans:null,e:'',stats:null,winners:null,a:'O',b:'X'})}
+    return up({phase:'lobby',g:(R.g||0)+1,dead:{},revived:{},used:[],qNo:0,qIdx:-1,q:'',ans:null,e:'',stats:null,winners:null,a:'O',b:'X',ia:'',ib:''})}
 }
 async function startRound(idx){
   const q=Q[idx];if(!validItem(q)){toast(`R${idx+1} 내용을 채워 주세요 (문제·선택지·정답)`);return}
   if(dirty&&!(await save(true)))return;
+  if(q.ia||q.ib)await ensureImages([q.ia,q.ib],room);
   if(!['lobby','reveal'].includes(R.phase)&&!confirm('진행 중인 라운드를 건너뛰고 이 라운드를 시작할까요?'))return;
   const used=(R.used||[]).includes(idx)?R.used:[...(R.used||[]),idx];
-  await up({phase:'question',round:(R.round||0)+1,q:q.q,a:q.a,b:q.b,ans:null,e:'',dur:Number(q.t)||R.defaultDur||10,
+  await up({phase:'question',round:(R.round||0)+1,q:q.q,a:q.a,b:q.b,ia:q.ia||'',ib:q.ib||'',ans:null,e:'',dur:Number(q.t)||R.defaultDur||10,
     startedAt:NOW,startedKey:Math.random().toString(36).slice(2,8),qIdx:idx,used,qNo:used.length,qTotal:Q.length,stats:null});
   scrollTo({top:0,behavior:'smooth'});
 }
@@ -328,7 +323,7 @@ function renderP(){
   const k=$('search').value.trim();
   const list=P.filter(p=>!k||p.name.includes(k)).map(p=>[p,alive(p)]).sort((x,y)=>y[1]-x[1]||x[0].name.localeCompare(y[0].name)).slice(0,300);
   const h=list.map(([p,a])=>{const c=ch(p);return `<div class="pi ${a?'':'dead'}">${p.avatar}<span class="nm">${esc(p.name)}</span>
-    ${c&&R.phase!=='lobby'?`<b class="${c==='A'?'mark-a':'mark-b'}" style="font-size:12px">${esc(c==='A'?R.a:R.b)}</b>`:''}
+    ${c&&R.phase!=='lobby'?`<b class="${c==='A'?'mark-a':'mark-b'}" style="font-size:12px">${esc(nm(c==='A'?R.a:R.b,c))}</b>`:''}
     ${a?`<button class="btn sm" data-a="eliminate" data-id="${p.id}">탈락</button>`:`<button class="btn sm ok" data-a="revive" data-id="${p.id}">부활</button>`}
     <button class="btn sm" data-a="kick" data-id="${p.id}" title="퇴장">✕</button></div>`}).join('')||'<div class="muted">아직 참가자가 없어요. 참가자용 QR을 띄워 주세요</div>';
   if($('pl').dataset.h!==h){$('pl').innerHTML=h;$('pl').dataset.h=h}
@@ -340,8 +335,10 @@ $('pl').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;cons
 
 // ---------- 라운드 편집 ----------
 function cleanItems(list){return list.map(x=>({q:String(x.q||'').trim().slice(0,300),a:String(x.a||'').trim().slice(0,20),b:String(x.b||'').trim().slice(0,20),
-  ans:x.ans==='A'||x.ans==='B'?x.ans:'',t:Math.max(0,Math.min(300,Math.round(+x.t||0)))||'',e:String(x.e||'').trim().slice(0,200)}))}
-const validItem=x=>x&&String(x.q).trim()&&String(x.a).trim()&&String(x.b).trim()&&(x.ans==='A'||x.ans==='B');
+  ia:String(x.ia||''),ib:String(x.ib||''),ans:x.ans==='A'||x.ans==='B'?x.ans:'',t:Math.max(0,Math.min(300,Math.round(+x.t||0)))||'',e:String(x.e||'').trim().slice(0,200)}))}
+const validItem=x=>x&&String(x.q).trim()&&(String(x.a).trim()||x.ia)&&(String(x.b).trim()||x.ib)&&(x.ans==='A'||x.ans==='B');
+const ansLabel=(x,s)=>{const im=s==='A'?x.ia:x.ib,t=s==='A'?x.a:x.b;return (im?`<img src="${esc(im)}">`:'')+esc(t||(im?'사진':s==='A'?'왼쪽':'오른쪽'))};
+const picCell=(x,s)=>{const im=s==='A'?x.ia:x.ib;return im?`<img src="${esc(im)}"><button class="btn sm" data-act="rm${s}">✕ 사진 빼기</button>`:`<label class="btn sm">📷 사진 넣기<input type="file" accept="image/*" data-img="${s}" hidden></label><span class="muted">(선택)</span>`};
 const presetOpts=PRESETS.map((p,i)=>`<option value="${i}">${p[0]} / ${p[1]}</option>`).join('');
 $('allPreset').innerHTML+=presetOpts;
 
@@ -353,7 +350,8 @@ function renderEditor(){
       <button class="btn sm" data-act="go">▶ 출제</button><button class="btn sm" data-act="up" title="위로">↑</button><button class="btn sm" data-act="del" title="삭제">🗑</button></div>
     <textarea data-f="q" rows="2" placeholder="문제를 입력하세요">${esc(x.q)}</textarea>
     <div class="lbls"><input data-f="a" placeholder="왼쪽 선택지 (예: O, 파랑)" value="${esc(x.a)}"><input data-f="b" placeholder="오른쪽 선택지 (예: X, 빨강)" value="${esc(x.b)}"></div>
-    <div class="ansrow"><span class="muted">정답</span><button class="ansbtn A ${x.ans==='A'?'on':''}" data-ans="A">${esc(x.a||'왼쪽')}</button><button class="ansbtn B ${x.ans==='B'?'on':''}" data-ans="B">${esc(x.b||'오른쪽')}</button></div>
+    <div class="pics"><div data-pic="A">${picCell(x,'A')}</div><div data-pic="B">${picCell(x,'B')}</div></div>
+    <div class="ansrow"><span class="muted">정답</span><button class="ansbtn A ${x.ans==='A'?'on':''}" data-ans="A">${ansLabel(x,'A')}</button><button class="ansbtn B ${x.ans==='B'?'on':''}" data-ans="B">${ansLabel(x,'B')}</button></div>
     <div class="mini"><span class="muted">타이머</span><input data-f="t" type="number" min="3" max="300" placeholder="기본" value="${esc(x.t)}"><input data-f="e" placeholder="해설 (선택, 정답 공개 때 표시)" value="${esc(x.e)}"></div>
   </div>`).join('');
   markRounds();validateAll();
@@ -370,14 +368,23 @@ function setDirty(){dirty=JSON.stringify(cleanItems(Q))!==savedJSON;$('dirty').t
 $('rounds').oninput=e=>{const el=e.target.closest('[data-f]');if(!el)return;const card=el.closest('.rc'),i=+card.dataset.i,f=el.dataset.f;
   if(f==='preset'){const p=PRESETS[+el.value];if(p){Q[i].a=p[0];Q[i].b=p[1];card.querySelector('[data-f=a]').value=p[0];card.querySelector('[data-f=b]').value=p[1]}el.value=''}
   else Q[i][f]=el.value;
-  if(f==='a'||f==='b'||f==='preset'){card.querySelector('.ansbtn.A').textContent=Q[i].a||'왼쪽';card.querySelector('.ansbtn.B').textContent=Q[i].b||'오른쪽'}
+  if(f==='a'||f==='b'||f==='preset'){card.querySelector('.ansbtn.A').innerHTML=ansLabel(Q[i],'A');card.querySelector('.ansbtn.B').innerHTML=ansLabel(Q[i],'B')}
   card.classList.toggle('bad',!validItem(Q[i]));setDirty()};
 $('rounds').onclick=e=>{const card=e.target.closest('.rc');if(!card)return;const i=+card.dataset.i;
   const ab=e.target.closest('[data-ans]');if(ab){Q[i].ans=ab.dataset.ans;card.querySelectorAll('.ansbtn').forEach(b=>b.classList.toggle('on',b===ab));card.classList.toggle('bad',!validItem(Q[i]));setDirty();return}
   const act=e.target.closest('[data-act]')?.dataset.act;
+  if(act==='rmA'||act==='rmB'){const s=act.slice(2);Q[i][s==='A'?'ia':'ib']='';refreshPic(card,i);return}
   if(act==='go')startRound(i);
   if(act==='up'&&i>0){if(R&&R.phase!=='lobby'&&R.phase!=='ended')return toast('게임 중에는 순서를 바꿀 수 없어요');[Q[i-1],Q[i]]=[Q[i],Q[i-1]];renderEditor();setDirty()}
   if(act==='del'){if(R&&R.phase!=='lobby'&&R.phase!=='ended')return toast('게임 중에는 삭제할 수 없어요');if(Q.length>1&&confirm(`R${i+1}을 삭제할까요?`)){Q.splice(i,1);renderEditor();setDirty()}}};
+function refreshPic(card,i){for(const s of ['A','B'])card.querySelector(`[data-pic=${s}]`).innerHTML=picCell(Q[i],s);
+  card.querySelector('.ansbtn.A').innerHTML=ansLabel(Q[i],'A');card.querySelector('.ansbtn.B').innerHTML=ansLabel(Q[i],'B');
+  card.classList.toggle('bad',!validItem(Q[i]));setDirty()}
+$('rounds').addEventListener('change',async e=>{const inp=e.target.closest('[data-img]');if(!inp||!inp.files[0])return;
+  const card=inp.closest('.rc'),i=+card.dataset.i,s=inp.dataset.img,cell=card.querySelector(`[data-pic=${s}]`);
+  cell.innerHTML='<span class="muted">올리는 중…</span>';
+  try{Q[i][s==='A'?'ia':'ib']=await uploadImage(inp.files[0],room);toast('사진을 넣었어요. 저장을 눌러 주세요',1)}catch(err){toast(err.message)}
+  refreshPic(card,i)});
 $('applyN').onclick=()=>{const n=Math.max(1,Math.min(200,Math.round(+$('nRounds').value)||1));
   if(n<Q.length&&!confirm(`R${n+1}~R${Q.length}를 지울까요?`))return;
   const last=Q[Q.length-1]||blank();while(Q.length<n)Q.push({...blank(),a:last.a||'O',b:last.b||'X',t:last.t||''});Q.length=n;renderEditor();setDirty()};
@@ -388,7 +395,7 @@ $('applyT').onclick=()=>{const t=Math.round(+$('allT').value);if(!t)return;Q.for
 async function save(silent){
   const bad=Q.map((x,i)=>validItem(x)?0:i+1).filter(Boolean);
   if(bad.length&&!silent&&!confirm(`R${bad.join(', R')}는 비어 있거나 정답이 없어요. 그래도 저장할까요? (진행 전에 꼭 채워 주세요)`))return false;
-  try{const items=cleanItems(Q);await db.set(rp('/quiz/list'),{items});await up({qTotal:items.length});savedJSON=JSON.stringify(items);setDirty();if(!silent)toast(`${items.length}라운드 저장했어요 ✅`,1);return true}
+  try{const items=cleanItems(Q),savedAt=Date.now();mySavedAt=savedAt;await db.set(rp('/quiz/list'),{items,savedAt});keepLocal(room,items,savedAt);await up({qTotal:items.length});savedJSON=JSON.stringify(items);setDirty();if(!silent)toast(`${items.length}라운드 저장했어요 ✅`,1);return true}
   catch(e){toast('저장 실패: '+e.message);return false}
 }
 $('saveBtn').onclick=$('saveBtn2').onclick=()=>save(false);
@@ -404,13 +411,24 @@ $('csv').onchange=async e=>{const file=e.target.files[0];if(!file)return;const r
   if(!items.length)return toast('불러올 문제가 없어요');
   if(!confirm(`${items.length}개 라운드를 불러와서 지금 목록을 바꿀까요?`))return;
   Q=items;renderEditor();setDirty();toast('불러왔어요. 저장을 눌러야 적용돼요',1);e.target.value=''};
+$('fileOut').onclick=async()=>{
+  toast('파일 만드는 중…',1);
+  const toData=async u=>{if(!u||u.startsWith('data:'))return u;try{const b=await (await fetch(u)).blob();return await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)})}catch(_){return ''}};
+  const items=[];for(const x of cleanItems(Q))items.push({...x,ia:await toData(x.ia),ib:await toData(x.ib)});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({v:1,title:R?.title||'',items})],{type:'application/json'}));
+  a.download=`퀴즈문제-${new Date().toISOString().slice(0,10)}.json`;a.click();toast('저장했어요. 이 파일을 다른 기기에서 불러오면 그대로 옮겨져요',1)};
+$('fileIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  let data;try{data=JSON.parse(await f.text())}catch(_){return toast('문제 파일이 아니에요')}
+  if(!Array.isArray(data.items)||!data.items.length)return toast('문제가 없는 파일이에요');
+  if(!confirm(`${data.items.length}개 라운드를 불러와서 지금 목록을 바꿀까요?`))return;
+  toast('불러오는 중…',1);
+  const up1=async d=>{if(!d||!d.startsWith('data:'))return d||'';try{return await uploadImage(await (await fetch(d)).blob(),room)}catch(_){return ''}};
+  const items=[];for(const x of data.items)items.push({...x,ia:await up1(x.ia),ib:await up1(x.ib)});
+  Q=items;renderEditor();setDirty();await save(true);toast(`${items.length}라운드를 불러와서 저장했어요 ✅`,1)};
 $('csvOut').onclick=()=>{const csv='﻿문제,왼쪽,오른쪽,정답,제한시간,해설\n'+cleanItems(Q).map(x=>[x.q,x.a,x.b,x.ans==='A'?'왼쪽':x.ans==='B'?'오른쪽':'',x.t,x.e].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`quiz-${room}.csv`;a.click()};
 
 // ---------- 시작 ----------
-if(!room){landing()}
-else if(!(await db.get(`rooms/${room}`))&&!(KEY&&await makeRoom(room,KEY,(recentRooms().find(x=>x.r===room)||{}).title||'').then(()=>true,()=>false))){landing(`방 ${room}을(를) 찾을 수 없어요`)}
-else if(!(await becomeHost(room,KEY))){landing('마스터 권한이 없어요. 마스터 QR로 다시 들어와 주세요')}
-else start();
+if(PW)login(PW);else landing();
 </script>
 </body></html>

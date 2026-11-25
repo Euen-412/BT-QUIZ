@@ -8,7 +8,9 @@ const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
-const PUB = path.join(__dirname, 'public');
+// 화면 파일은 public 폴더 안에 있어도 되고, server.js 옆(맨 바깥)에 있어도 됩니다.
+const PUB = fs.existsSync(path.join(__dirname, 'public', 'index.html')) ? path.join(__dirname, 'public') : __dirname;
+const FILES = new Set(['index.html', 'host.html', 'screen.html', 'db.js', 'config.js', 'common.css', 'favicon.ico']);
 const DATA = path.join(__dirname, 'data', 'store.json');
 
 // ---------- 저장소 (메모리 + 파일 백업) ----------
@@ -25,7 +27,7 @@ function persist() {
 // 오래된 방 정리 (7일)
 setInterval(() => {
   const cut = Date.now() - 7 * 864e5;
-  for (const [k, v] of store) if (/^rooms\/[^/]+$/.test(k) && (v.touched || 0) < cut) {
+  for (const [k, v] of store) if (/^rooms\/[^/]+$/.test(k) && k !== `rooms/${ROOM}` && (v.touched || 0) < cut) {
     for (const k2 of [...store.keys()]) if (k2 === k || k2.startsWith(k + '/')) store.delete(k2);
   }
 }, 36e5);
@@ -34,6 +36,19 @@ const clone = o => JSON.parse(JSON.stringify(o));
 const isDel = v => v && typeof v === 'object' && v.__del === 1;
 const isNow = v => v && typeof v === 'object' && v.__now === 1;
 function resolve(obj) { const o = {}; for (const [k, v] of Object.entries(obj || {})) if (!isDel(v)) o[k] = isNow(v) ? Date.now() : v; return o; }
+
+// ---------- 게임방은 하나(MAIN) + 마스터 비밀번호 ----------
+// 비밀번호: Render 환경변수 MASTER_PASSWORD 가 있으면 그것, 없으면 처음 /host 에서 정한 것
+const ROOM = 'MAIN';
+const PW_FILE = path.join(__dirname, 'data', 'pw.txt');
+let masterPw = process.env.MASTER_PASSWORD || (() => { try { return fs.readFileSync(PW_FILE, 'utf8').trim(); } catch (_) { return ''; } })();
+function ensureRoom() {
+  const p = `rooms/${ROOM}`;
+  if (!store.has(p)) store.set(p, { owner: 'server', title: '', phase: 'lobby', round: 0, g: 0, q: '', a: 'O', b: 'X', ia: '', ib: '', ans: null, e: '', dur: 10, defaultDur: 10,
+    startedAt: Date.now(), startedKey: '', qIdx: -1, used: [], qNo: 0, qTotal: 0, stats: null, dead: {}, revived: {}, joinOpen: true, allWrongSurvive: true, winners: null, touched: Date.now() });
+  if (!store.has(p + '/quiz/list')) store.set(p + '/quiz/list', { items: [], savedAt: 0 });
+}
+ensureRoom();
 
 // ---------- 권한 (Firestore 규칙과 같은 내용) ----------
 const seg = p => p.split('/');
@@ -146,15 +161,52 @@ function handleOp(ws, m) {
   return { data: null };
 }
 
+// ---------- 사진 ----------
+const IMG_DIR = path.join(__dirname, 'data', 'img');
+const IMG_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+const imgs = new Map(); let imgBytes = 0;
+const tokenUid = tok => crypto.createHash('sha256').update(tok).digest('base64url').slice(0, 20).replace(/[-_]/g, 'x');
+function sniff(b) {
+  if (b[0] === 0xff && b[1] === 0xd8) return 'jpg';
+  if (b[0] === 0x89 && b[1] === 0x50) return 'png';
+  if (b.slice(0, 4).toString() === 'RIFF' && b.slice(8, 12).toString() === 'WEBP') return 'webp';
+  if (b.slice(0, 3).toString() === 'GIF') return 'gif';
+  return null;
+}
+function handleUpload(req, res, url) {
+  const tok = String(req.headers['x-token'] || ''), r = url.searchParams.get('r') || '';
+  const out = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+  if (tok.length < 16 || !/^[A-Za-z0-9]{1,12}$/.test(r) || !isHost(tokenUid(tok), r)) { req.resume(); return out(403, { err: 'forbidden' }); }
+  const chunks = []; let n = 0, over = false;
+  req.on('data', c => { n += c.length; if (n > 3 * 1024 * 1024) { over = true; req.destroy(); } else chunks.push(c); });
+  req.on('end', () => {
+    if (over) return out(413, { err: 'too-large' });
+    const buf = Buffer.concat(chunks), ext = sniff(buf);
+    if (!ext) return out(415, { err: 'not-image' });
+    const name = crypto.createHash('sha1').update(buf).digest('hex').slice(0, 20) + '.' + ext;
+    if (!imgs.has(name) && imgBytes < 300 * 1024 * 1024) { imgs.set(name, buf); imgBytes += buf.length; }
+    try { fs.mkdirSync(IMG_DIR, { recursive: true }); fs.writeFileSync(path.join(IMG_DIR, name), buf); } catch (_) {}
+    out(200, { url: '/img/' + name });
+  });
+}
+
 // ---------- HTTP ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const ROUTES = { '/': 'index.html', '/host': 'host.html', '/screen': 'screen.html' };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/health') { res.writeHead(200, { 'Cache-Control': 'no-store' }); return res.end('ok'); }
+  if (url.pathname === '/upload' && req.method === 'POST') return handleUpload(req, res, url);
+  const im = url.pathname.match(/^\/img\/([a-f0-9]{20}\.(jpg|png|webp|gif))$/);
+  if (im) {
+    const buf = imgs.get(im[1]) || (() => { try { return fs.readFileSync(path.join(IMG_DIR, im[1])); } catch (_) { return null; } })();
+    if (!buf) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'Content-Type': IMG_TYPES[im[2]], 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=31536000, immutable' });
+    return res.end(req.method === 'HEAD' ? undefined : buf);
+  }
   const file = ROUTES[url.pathname] || url.pathname.slice(1);
-  const fp = path.normalize(path.join(PUB, file));
-  if (!fp.startsWith(PUB)) { res.writeHead(403); return res.end(); }
+  if (!FILES.has(file)) { res.writeHead(404); return res.end('not found'); }
+  const fp = path.join(PUB, file);
   fs.readFile(fp, (err, data) => {
     if (err) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(fp)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
@@ -174,10 +226,20 @@ wss.on('connection', ws => {
     if (m.t === 'hello') {
       const tok = String(m.token || '');
       if (tok.length < 16) return ws.close();
-      ws.uid = crypto.createHash('sha256').update(tok).digest('base64url').slice(0, 20).replace(/[-_]/g, 'x');
+      ws.uid = tokenUid(tok);
       return ws.send(JSON.stringify({ t: 'hi', uid: ws.uid }));
     }
     if (!ws.uid) return;
+    if (m.t === 'master') {
+      const pw = String(m.pw || '').trim();
+      let ok = false, created = false;
+      if (pw.length >= 4 && !masterPw) {
+        masterPw = pw; created = true;
+        try { fs.mkdirSync(path.dirname(PW_FILE), { recursive: true }); fs.writeFileSync(PW_FILE, pw); } catch (_) {}
+      }
+      if (masterPw && pw === masterPw) { ok = true; ensureRoom(); store.set(`rooms/${ROOM}/hosts/${ws.uid}`, { at: Date.now() }); }
+      return ws.send(JSON.stringify({ t: 'master', ok, created, needSetup: !masterPw }));
+    }
     if (m.t === 'op') {
       let r; try { r = handleOp(ws, m); } catch (e) { r = { err: 'server-error' }; }
       return ws.send(JSON.stringify({ t: 'res', id: m.id, ...r }));
@@ -204,5 +266,8 @@ wss.on('connection', ws => {
 setInterval(() => {
   for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; try { ws.ping(); } catch (_) {} }
 }, 30000);
+
+// Render 무료 서버가 잠들지 않게 10분마다 자기 주소를 한 번씩 부름 (잠들면 저장된 내용이 지워지기 때문)
+if (process.env.RENDER_EXTERNAL_URL) setInterval(() => { fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}); }, 10 * 60 * 1000);
 
 server.listen(PORT, () => console.log(`퀴즈 서버 실행 중: http://localhost:${PORT}  (마스터: /host)`));
