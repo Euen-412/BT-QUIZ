@@ -161,9 +161,10 @@ export const qs = new URLSearchParams(location.search);
 export function withMock(url) { return MOCK ? url + (url.includes('?') ? '&' : '?') + 'mock=1' : url; }
 
 // 라벨 표시: O/X 같은 한 글자는 큰 기호로, 나머지는 글자로
-export function labelHTML(t, side, cls = '') {
+export function labelHTML(t, side, cls = '', img = '') {
   const c = side === 'A' ? 'mark-a' : 'mark-b';
   const s = String(t ?? '');
+  if (img) return `<span class="pic ${c} ${cls}"><img src="${esc(img)}" alt="" draggable="false">${s ? `<b>${esc(s)}</b>` : ''}</span>`;
   const n = Math.max(1, [...s].length);
   return `<span class="${c} ${n === 1 ? 'sym' : 'word'} ${cls}" style="--n:${n}">${esc(s)}</span>`;
 }
@@ -183,4 +184,44 @@ export function qrInto(el, text, size) {
   el.innerHTML = '';
   try { new QRCode(el, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M }); }
   catch (_) { el.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=0&data=${encodeURIComponent(text)}">`; }
+}
+
+// ---------- 사진 업로드 ----------
+// 폰 사진도 가볍게: 긴 변 720px JPEG로 줄여서 올림. 마스터 기기(IndexedDB)에도 보관해서
+// 서버가 잠들었다 깨어나 사진이 없어져도 자동으로 다시 올림.
+const IDB = () => new Promise((res, rej) => { const r = indexedDB.open('quizimg', 1); r.onupgradeneeded = () => r.result.createObjectStore('b'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+async function idbPut(k, v) { try { const db = await IDB(); await new Promise(r => { const t = db.transaction('b', 'readwrite'); t.objectStore('b').put(v, k); t.oncomplete = r; t.onerror = r; }); } catch (_) {} }
+async function idbGet(k) { try { const db = await IDB(); return await new Promise(r => { const q = db.transaction('b').objectStore('b').get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(null); }); } catch (_) { return null; } }
+
+async function shrink(file) {
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) throw new Error('사진을 읽을 수 없어요');
+  const k = Math.min(1, 720 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.82));
+}
+async function send(blob, room) {
+  const r = await fetch('/upload?r=' + encodeURIComponent(room), { method: 'POST', headers: { 'x-token': localStorage.getItem('q_tok') || '' }, body: blob });
+  if (!r.ok) throw new Error(r.status === 403 ? '마스터만 사진을 올릴 수 있어요' : '사진 올리기 실패 (' + r.status + ')');
+  return (await r.json()).url;
+}
+export async function uploadImage(file, room) {
+  const blob = await shrink(file);
+  if (MOCK) return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+  const url = await send(blob, room);
+  await idbPut(url, blob);
+  return url;
+}
+// 서버에 사진이 없으면(서버 재시작 등) 이 기기에 보관된 사진으로 다시 올림
+export async function ensureImages(urls, room) {
+  if (MOCK) return 0;
+  let fixed = 0;
+  for (const u of new Set(urls.filter(u => u && u.startsWith('/img/')))) {
+    const h = await fetch(u, { method: 'HEAD' }).catch(() => null);
+    if (h && h.ok) continue;
+    const blob = await idbGet(u);
+    if (blob) { try { await send(blob, room); fixed++; } catch (_) {} }
+  }
+  return fixed;
 }

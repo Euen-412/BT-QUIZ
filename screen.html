@@ -21,6 +21,10 @@ header{display:flex;align-items:center;gap:2vw;min-height:15vh}
 .zone.a{background:var(--o-soft)} .zone.b{background:var(--x-soft)}
 .zone .big{opacity:.2;max-width:90%}
 .zone .big .sym{font-size:38vh}.zone .big .word{font-size:min(14vh,calc(40vw / var(--n)))}
+.zone .big.picOn{opacity:1;position:absolute;top:1.5vh;left:3%;right:3%;height:44%;display:flex;justify-content:center;max-width:none}
+.zone .big.picOn .pic{height:100%}.zone .big.picOn .pic img{max-height:calc(100% - 6vh)}.zone .big.picOn .pic b{font-size:4.5vh}
+#field.hasPic .zone .zc{top:auto;bottom:1vh}
+#stamp .pic img{max-height:52vh;max-width:60vw}#stamp .pic b{font-size:8vh;background:rgba(0,0,0,.55);padding:.5vh 2vw;border-radius:2vh}
 .zone .zc{position:absolute;top:1.2vh;font-size:4vh;font-family:'Black Han Sans'}
 .zone.a .zc{color:var(--o)} .zone.b .zc{color:var(--x)}
 .mid{flex:0 0 12%;background:rgba(0,0,0,.18);border-left:.5vh dashed var(--gold);border-right:.5vh dashed var(--gold)}
@@ -116,15 +120,15 @@ function render(){
   $('qno').textContent=`R${R.qNo||1}`;$('qtext').textContent=R.q||'';
   const al=P.filter(alive);
   $('sAlive').textContent=al.length;$('sTotal').textContent=P.length;
-  const bA=labelHTML(R.a||'O','A'),bB=labelHTML(R.b||'X','B');
+  const hasPic=!!(R.ia||R.ib)&&!lob;const bA=labelHTML(hasPic?R.a:(R.a||'O'),'A','',hasPic?R.ia:''),bB=labelHTML(hasPic?R.b:(R.b||'X'),'B','',hasPic?R.ib:'');$('bigA').classList.toggle('picOn',hasPic);$('bigB').classList.toggle('picOn',hasPic);
   if($('bigA').innerHTML!==bA)$('bigA').innerHTML=bA;if($('bigB').innerHTML!==bB)$('bigB').innerHTML=bB;
   const showCnt=ph==='question'||ph==='locked'||ph==='reveal';const st=R.stats;
   const nA=ph==='reveal'&&st?st.a:al.filter(p=>ch(p)==='A').length,nB=ph==='reveal'&&st?st.b:al.filter(p=>ch(p)==='B').length;
   $('zcA').textContent=showCnt?`${nA}명`:'';$('zcB').textContent=showCnt?`${nB}명`:'';
-  $('field').className=lob?'lobby':ph==='reveal'&&R.ans?'rev-'+R.ans:'';
+  $('field').className=(lob?'lobby':ph==='reveal'&&R.ans?'rev-'+R.ans:'')+(hasPic?' hasPic':'');
   $('ovRev').classList.toggle('on',ph==='reveal');
   if(ph==='reveal'&&(lastPhase!=='reveal'||$('stamp').dataset.r!=R.round)){
-    $('stamp').dataset.r=R.round;$('stamp').innerHTML=labelHTML(R.ans==='A'?R.a:R.b,R.ans);
+    $('stamp').dataset.r=R.round;$('stamp').innerHTML=labelHTML(R.ans==='A'?R.a:R.b,R.ans,'',R.ans==='A'?R.ia:R.ib);
     $('stamp').style.animation='none';void $('stamp').offsetWidth;$('stamp').style.animation='';}
   if(ph==='reveal'&&st){const out=st.before-st.survivors;
     $('revInfo').innerHTML=(R.e?`<div style="color:var(--gold)">💡 ${esc(R.e)}</div>`:'')+(st.saved?'전원 오답! 모두 생존합니다 🙌':`탈락 <b style="color:var(--x)">${out}</b>명 · 생존 <b style="color:var(--ok)">${st.survivors}</b>명`)}
@@ -143,7 +147,7 @@ function layout(){
   const seen=new Set();
   for(const k of ['A','B','']){
     const z=zones[k].getBoundingClientRect();const list=groups[k];const n=list.length;if(!n||z.width<10)continue;
-    const padT=k?z.height*.1:8,pad=8,w=z.width-pad*2,h=z.height-padT-pad;
+    const padT=k?z.height*((R.ia||R.ib)&&R.phase!=='lobby'?.5:.1):8,pad=8,w=z.width-pad*2,h=z.height-padT-pad;
     let s=Math.floor(Math.sqrt(w*h/n));s=Math.max(18,Math.min(R.phase==='lobby'?90:70,Math.min(w,s)));
     let cols=Math.max(1,Math.floor(w/s)),rows=Math.ceil(n/cols);
     while(rows*s>h&&s>18){s-=2;cols=Math.max(1,Math.floor(w/s));rows=Math.ceil(n/cols)}

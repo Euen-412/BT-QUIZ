@@ -148,12 +148,49 @@ function handleOp(ws, m) {
   return { data: null };
 }
 
+// ---------- 사진 ----------
+const IMG_DIR = path.join(__dirname, 'data', 'img');
+const IMG_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+const imgs = new Map(); let imgBytes = 0;
+const tokenUid = tok => crypto.createHash('sha256').update(tok).digest('base64url').slice(0, 20).replace(/[-_]/g, 'x');
+function sniff(b) {
+  if (b[0] === 0xff && b[1] === 0xd8) return 'jpg';
+  if (b[0] === 0x89 && b[1] === 0x50) return 'png';
+  if (b.slice(0, 4).toString() === 'RIFF' && b.slice(8, 12).toString() === 'WEBP') return 'webp';
+  if (b.slice(0, 3).toString() === 'GIF') return 'gif';
+  return null;
+}
+function handleUpload(req, res, url) {
+  const tok = String(req.headers['x-token'] || ''), r = url.searchParams.get('r') || '';
+  const out = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+  if (tok.length < 16 || !/^[A-Za-z0-9]{1,12}$/.test(r) || !isHost(tokenUid(tok), r)) { req.resume(); return out(403, { err: 'forbidden' }); }
+  const chunks = []; let n = 0, over = false;
+  req.on('data', c => { n += c.length; if (n > 3 * 1024 * 1024) { over = true; req.destroy(); } else chunks.push(c); });
+  req.on('end', () => {
+    if (over) return out(413, { err: 'too-large' });
+    const buf = Buffer.concat(chunks), ext = sniff(buf);
+    if (!ext) return out(415, { err: 'not-image' });
+    const name = crypto.createHash('sha1').update(buf).digest('hex').slice(0, 20) + '.' + ext;
+    if (!imgs.has(name) && imgBytes < 300 * 1024 * 1024) { imgs.set(name, buf); imgBytes += buf.length; }
+    try { fs.mkdirSync(IMG_DIR, { recursive: true }); fs.writeFileSync(path.join(IMG_DIR, name), buf); } catch (_) {}
+    out(200, { url: '/img/' + name });
+  });
+}
+
 // ---------- HTTP ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const ROUTES = { '/': 'index.html', '/host': 'host.html', '/screen': 'screen.html' };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/health') { res.writeHead(200, { 'Cache-Control': 'no-store' }); return res.end('ok'); }
+  if (url.pathname === '/upload' && req.method === 'POST') return handleUpload(req, res, url);
+  const im = url.pathname.match(/^\/img\/([a-f0-9]{20}\.(jpg|png|webp|gif))$/);
+  if (im) {
+    const buf = imgs.get(im[1]) || (() => { try { return fs.readFileSync(path.join(IMG_DIR, im[1])); } catch (_) { return null; } })();
+    if (!buf) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'Content-Type': IMG_TYPES[im[2]], 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=31536000, immutable' });
+    return res.end(req.method === 'HEAD' ? undefined : buf);
+  }
   const file = ROUTES[url.pathname] || url.pathname.slice(1);
   if (!FILES.has(file)) { res.writeHead(404); return res.end('not found'); }
   const fp = path.join(PUB, file);
@@ -176,7 +213,7 @@ wss.on('connection', ws => {
     if (m.t === 'hello') {
       const tok = String(m.token || '');
       if (tok.length < 16) return ws.close();
-      ws.uid = crypto.createHash('sha256').update(tok).digest('base64url').slice(0, 20).replace(/[-_]/g, 'x');
+      ws.uid = tokenUid(tok);
       return ws.send(JSON.stringify({ t: 'hi', uid: ws.uid }));
     }
     if (!ws.uid) return;
