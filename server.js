@@ -66,6 +66,7 @@ function canRead(uid, p, isCol) {
   return isHost(uid, s[1]);
 }
 function validPlayer(d) {
+  const { at, chg, ...rest } = d; d = rest;  // at/chg 는 서버가 직접 기록 (참가자가 못 바꿈)
   const keys = Object.keys(d);
   return keys.every(k => ['name', 'avatar', 'color', 'choice', 'round', 'late', 'g'].includes(k))
     && typeof d.name === 'string' && d.name.length > 0 && d.name.length <= 12
@@ -157,6 +158,18 @@ function handleOp(ws, m) {
   if (JSON.stringify(next).length > 300000) return { err: 'too-large' };
   if (!canWrite(uid, m.op, p, old, next)) return { err: 'permission-denied' };
   if (seg(p).length === 2) next.touched = Date.now();
+  // 점수용: 참가자가 마지막으로 고른 시각(at, 문제 시작 후 ms)과 바꾼 횟수(chg)를 서버가 기록
+  if (seg(p)[2] === 'players') {
+    const R = room(seg(p)[1]) || {};
+    if (old && next.choice !== old.choice && next.choice && next.round === R.round) {
+      const sameRound = old.round === next.round && old.choice;
+      next.at = Date.now() - (R.startedAt || 0);
+      next.chg = sameRound ? (old.chg || 0) + 1 : 0;
+    } else if (old && next.round === old.round) { next.at = old.at; next.chg = old.chg; }
+    else { delete next.at; delete next.chg; }
+    if (next.at === undefined) delete next.at;
+    if (next.chg === undefined) delete next.chg;
+  }
   store.set(p, next); changed(p);
   return { data: null };
 }

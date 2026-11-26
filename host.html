@@ -57,6 +57,11 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 .ansbtn img{height:22px;vertical-align:middle;border-radius:4px;margin-right:4px}
 .ansbtn.on.A{background:var(--o);border-color:var(--o)}.ansbtn.on.B{background:var(--x);border-color:var(--x)}
 .mini{display:grid;grid-template-columns:auto 90px 1fr;gap:8px;align-items:center}
+.board{display:grid;gap:4px;max-height:520px;overflow:auto}
+.br{display:grid;grid-template-columns:44px 1fr 90px 80px 60px;gap:8px;align-items:center;background:var(--bg);border-radius:10px;padding:7px 10px;font-size:14px}
+.br.hd{background:none;color:var(--muted);font-size:12px;padding:0 10px}
+.br .rk{font-family:'Black Han Sans';font-size:18px;color:var(--gold)}.br .sc{font-weight:900;text-align:right}.br .gn{text-align:right;color:var(--ok)}.br .gn.neg{color:var(--x)}
+.br.dead{opacity:.55}
 .pl{max-height:460px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
 .pi{display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:10px;padding:6px 8px;font-size:14px}
 .pi.dead{opacity:.5}.pi .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -117,6 +122,13 @@ textarea{width:100%;resize:vertical;line-height:1.5}
     <label class="sw"><input type="checkbox" id="joinOpen"> 참가 허용 (끄면 새로 못 들어옴)</label>
     <label class="sw"><input type="checkbox" id="allWrong"> 생존자 전원 오답이면 모두 살리기</label>
     <label class="sw"><input type="checkbox" id="crowdOn"> 참가자 폰에 다른 사람 움직임 보이기</label>
+    <div style="border-top:1px solid var(--line);margin:8px 0;padding-top:8px">
+      <label class="sw"><input type="checkbox" id="scoreOn"> ⭐ 점수 사용 (빨리 맞힐수록 높은 점수)</label>
+      <div class="row"><span>1등 점수</span><input type="number" id="spMax" min="1" max="1000" step="1" style="width:80px">
+        <span>바꿀 때마다</span><input type="number" id="spPen" min="0" max="100" step="0.1" style="width:80px"><span>점 감점</span></div>
+      <div class="muted">정답자 중 빨리 고른 순서대로 1등 점수 → 참가자 수에 맞춰 조금씩 줄어요 (예: 200명이면 한 칸에 0.05점). 오답은 0점.</div>
+      <label class="sw"><input type="checkbox" id="boardOn"> 📺 대형화면에 점수 순위 띄우기</label>
+    </div>
     <div class="row" style="margin-top:6px">
       <button class="btn sm" id="reviveAll">전원 부활</button>
       <button class="btn sm" id="resetBtn">게임 초기화 (참가자 유지)</button>
@@ -143,6 +155,12 @@ textarea{width:100%;resize:vertical;line-height:1.5}
     </div>
     <div class="rounds" id="rounds"></div>
     <div class="row" style="margin-top:12px"><button class="btn" id="addR">＋ 라운드 추가</button><span class="grow"></span><button class="btn ok" id="saveBtn2">💾 저장</button></div>
+  </div>
+
+  <!-- 점수 순위 -->
+  <div class="card full">
+    <h2><span>⭐ 점수 순위</span><span class="row"><button class="btn sm" id="scoreCsv">점수 CSV 내보내기</button></span></h2>
+    <div class="board" id="board"></div>
   </div>
 
   <!-- 참가자 -->
@@ -253,9 +271,23 @@ function render(){
   $('barSt').innerHTML=`<b>${PH[ph]}</b> · ${inQ?`R${R.qNo}/${Q.length}`:`${Q.length}라운드 준비`}<br>생존 <b>${al.length}</b>/${P.length}${R.phase==='question'&&!locked?` · ⏱ <b>${Math.ceil(left/1000)}</b>초`:''}`;
   if(document.activeElement!==$('defDur'))$('defDur').value=R.defaultDur||10;
   if(document.activeElement!==$('title'))$('title').value=R.title||'';
-  $('joinOpen').checked=!!R.joinOpen;$('crowdOn').checked=R.crowd!==false;$('allWrong').checked=!!R.allWrongSurvive;
-  markRounds();renderP();
+  $('joinOpen').checked=!!R.joinOpen;$('scoreOn').checked=R.scoring!==false;$('boardOn').checked=!!R.showBoard;
+  if(document.activeElement!==$('spMax'))$('spMax').value=R.speedMax??10;if(document.activeElement!==$('spPen'))$('spPen').value=R.chgPen??0.5;$('crowdOn').checked=R.crowd!==false;$('allWrong').checked=!!R.allWrongSurvive;
+  markRounds();renderP();renderBoard();
 }
+function renderBoard(){
+  const sc=R.score||{},gn=R.gain||{},showG=R.phase==='reveal';
+  const list=P.map(p=>({p,s:sc[p.id]||0,g:gn[p.id],a:alive(p)})).sort((x,y)=>y.s-x.s);
+  let rank=0,prev=null;
+  const h=(R.scoring===false?'<div class="muted">점수 사용이 꺼져 있어요 (설정에서 켜기)</div>':'')+
+    (list.length?'<div class="br hd"><span>순위</span><span>이름</span><span style="text-align:right">총점</span><span style="text-align:right">이번</span><span>바꿈</span></div>':'<div class="muted">아직 참가자가 없어요</div>')+
+    list.slice(0,300).map((x,i)=>{if(x.s!==prev){rank=i+1;prev=x.s}const c=x.p.round===R.round?(x.p.chg||0):'';
+      return `<div class="br ${x.a?'':'dead'}"><span class="rk">${rank}</span><span>${x.p.avatar} ${esc(x.p.name)}</span><span class="sc">${x.s.toFixed(2)}</span><span class="gn ${x.g<0?'neg':''}">${showG&&x.g!==undefined?(x.g>=0?'+':'')+x.g.toFixed(2):''}</span><span class="muted">${c?c+'번':''}</span></div>`}).join('');
+  if($('board').dataset.h!==h){$('board').innerHTML=h;$('board').dataset.h=h}
+}
+$('scoreCsv').onclick=()=>{const sc=R.score||{};const rows=P.map(p=>[p.name,sc[p.id]||0,alive(p)?'생존':'탈락']).sort((a,b)=>b[1]-a[1]);
+  const csv='\ufeff순위,이름,점수,상태\n'+rows.map((r,i)=>[i+1,...r].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='점수순위.csv';a.click()};
 setInterval(()=>{if(R&&R.phase==='question')render()},500);
 
 // ---------- 진행 명령 ----------
@@ -269,9 +301,9 @@ async function cmd(c){
   if(c==='reviveLast'){const p={};for(const [id,r] of Object.entries(R.dead||{}))if(r===R.round){p['dead.'+id]=DEL;p['revived.'+id]=true}
     if(R.stats)p['stats.survivors']=P.filter(alive).length+Object.keys(p).length/2;return up(p)}
   if(c==='end'){if(!confirm('게임을 끝내고 현재 생존자를 우승자로 발표할까요?'))return;
-    return up({phase:'ended',winners:P.filter(alive).slice(0,300).map(p=>[p.name,p.avatar])})}
+    return up({phase:'ended',winners:P.filter(alive).slice(0,300).map(p=>[p.name,p.avatar]),top:topList(R.score||{})})}
   if(c==='reset'){if(!confirm('처음부터 다시 할까요? (참가자 유지, 모두 생존)'))return;
-    return up({phase:'lobby',g:(R.g||0)+1,dead:{},revived:{},used:[],qNo:0,qIdx:-1,q:'',ans:null,e:'',stats:null,winners:null,a:'O',b:'X',ia:'',ib:''})}
+    return up({phase:'lobby',g:(R.g||0)+1,dead:{},revived:{},used:[],qNo:0,qIdx:-1,q:'',ans:null,e:'',stats:null,winners:null,a:'O',b:'X',ia:'',ib:'',score:{},gain:{},top:[],fast:null})}
 }
 async function startRound(idx){
   const q=Q[idx];if(!validItem(q)){toast(`R${idx+1} 내용을 채워 주세요 (문제·선택지·정답)`);return}
@@ -280,9 +312,10 @@ async function startRound(idx){
   if(!['lobby','reveal'].includes(R.phase)&&!confirm('진행 중인 라운드를 건너뛰고 이 라운드를 시작할까요?'))return;
   const used=(R.used||[]).includes(idx)?R.used:[...(R.used||[]),idx];
   await up({phase:'question',round:(R.round||0)+1,q:q.q,a:q.a,b:q.b,ia:q.ia||'',ib:q.ib||'',ans:null,e:'',dur:Number(q.t)||R.defaultDur||10,
-    startedAt:NOW,startedKey:Math.random().toString(36).slice(2,8),qIdx:idx,used,qNo:used.length,qTotal:Q.length,stats:null});
+    startedAt:NOW,startedKey:Math.random().toString(36).slice(2,8),qIdx:idx,used,qNo:used.length,qTotal:Q.length,stats:null,gain:{},fast:null});
   scrollTo({top:0,behavior:'smooth'});
 }
+function topList(score){return P.map(p=>({n:p.name,a:p.avatar,s:score[p.id]||0})).sort((x,y)=>y.s-x.s).slice(0,10)}
 async function reveal(){
   const q=Q[R.qIdx];if(!q)return toast('현재 라운드 정보를 찾을 수 없어요');
   const part=P.filter(alive),ans=q.ans;
@@ -291,6 +324,16 @@ async function reveal(){
   const a=part.filter(p=>ch(p)==='A').length,b=part.filter(p=>ch(p)==='B').length;
   const patch={phase:'reveal',ans,e:q.e||'',stats:{a,b,none:part.length-a-b,before:part.length,survivors:saved?part.length:right.length,saved}};
   if(!saved)for(const p of part)if(ch(p)!==ans)patch['dead.'+p.id]=R.round;
+  if(R.scoring!==false){
+    // 정답자를 빨리 고른 순서로: 1등 = 최대점, 참가자 수(N)에 맞춰 한 칸씩 (최대점/N)만큼 줄어듦. 바꿀 때마다 감점.
+    const N=Math.max(1,part.length),max=+(R.speedMax??10),pen=+(R.chgPen??0.5),r2=v=>Math.round(v*100)/100;
+    const fastest=right.slice().sort((x,y)=>(x.at??9e12)-(y.at??9e12));
+    const gain={};fastest.forEach((p,k)=>gain[p.id]=max*(1-k/N));
+    for(const p of part)if(ch(p))gain[p.id]=r2((gain[p.id]||0)-pen*(p.chg||0));
+    const score={...(R.score||{})};for(const [id,g] of Object.entries(gain))score[id]=r2((score[id]||0)+g);
+    patch.score=score;patch.gain=gain;patch.top=topList(score);
+    patch.fast=fastest[0]?{n:fastest[0].name,a:fastest[0].avatar,t:Math.round((fastest[0].at||0)/10)/100}:null;
+  }
   await up(patch);
 }
 $('ctl').onclick=$('barBtn').onclick=e=>{const b=e.target.closest('[data-c]');if(b&&!b.disabled)cmd(b.dataset.c)};
@@ -300,6 +343,10 @@ $('defDur').onchange=()=>up({defaultDur:Math.max(3,Math.min(300,Math.round(+$('d
 $('title').onchange=()=>up({title:$('title').value.trim().slice(0,30)});
 $('joinOpen').onchange=e=>up({joinOpen:e.target.checked});
 $('allWrong').onchange=e=>up({allWrongSurvive:e.target.checked});
+$('scoreOn').onchange=e=>up({scoring:e.target.checked});
+$('spMax').onchange=()=>up({speedMax:Math.max(1,Math.min(1000,+$('spMax').value||10))});
+$('spPen').onchange=()=>up({chgPen:Math.max(0,Math.min(100,Math.round((+$('spPen').value||0)*100)/100))});
+$('boardOn').onchange=e=>up({showBoard:e.target.checked});
 $('crowdOn').onchange=e=>up({crowd:e.target.checked,...(e.target.checked?{}:{pos:''})});
 // 모든 참가자 위치를 모아서 방 문서에 주기적으로 기록 (참가자 폰에서 다른 사람이 움직이는 모습용)
 let lastPosAt=0;

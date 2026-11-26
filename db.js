@@ -141,6 +141,12 @@ function mockApi() {
         for (const s of parts.slice(0, -1)) o = o[s] = o[s] || {};
         if (v === DEL) delete o[parts.at(-1)]; else o[parts.at(-1)] = val(v);
       }
+      // 서버와 같게: 참가자 선택 시각/바꾼 횟수 기록
+      if (/\/players\//.test(p) && 'choice' in d && d.choice) {
+        const R = store[p.split('/players/')[0]] || {}, o = store[p];
+        o.chg = o._r === d.round && o._c && o._c !== d.choice ? (o.chg || 0) + 1 : (o._r === d.round ? o.chg || 0 : 0);
+        o.at = Date.now() - (R.startedAt || 0); o._r = d.round; o._c = d.choice;
+      }
       save();
     },
     del: async p => { delete store[p]; save(); },

@@ -59,6 +59,12 @@ header{display:flex;align-items:center;gap:2vw;min-height:15vh}
 #end{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:3vh;z-index:25;background:radial-gradient(circle,#4a3f10,var(--bg) 70%)}
 #end.on{display:flex}
 .endT{font-size:12vh;color:var(--gold)}
+#boardOv{position:fixed;right:2vw;top:20vh;z-index:30;background:rgba(15,18,30,.92);border:2px solid var(--gold);border-radius:2vh;padding:2vh 1.6vw;min-width:26vw;display:none}
+#boardOv.on{display:block}
+#boardOv h3{margin:0 0 1.2vh;font-family:'Black Han Sans';font-weight:400;font-size:3.4vh;color:var(--gold)}
+.bl{display:flex;justify-content:space-between;gap:2vw;font-size:2.6vh;padding:.6vh 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.bl b{color:var(--gold)}
+.endTop{display:grid;grid-template-columns:repeat(2,minmax(28vw,1fr));gap:1vh 3vw;margin-top:2vh}
 .champ{display:flex;flex-wrap:wrap;gap:1.5vh;justify-content:center;max-width:90vw;max-height:60vh;overflow:auto}
 .champ div{background:var(--panel);border:3px solid var(--gold);border-radius:2vh;padding:1.5vh 2vw;font-size:3.4vh;font-weight:900;animation:pop .5s backwards}
 .champ.solo div{font-size:9vh;padding:3vh 5vw}
@@ -74,7 +80,8 @@ header{display:flex;align-items:center;gap:2vw;min-height:15vh}
     <div class="crowd" id="crowd"></div>
   </div>
 </div>
-<div id="end"><div class="title endT" id="endT">🏆 최종 생존자</div><div class="champ" id="champ"></div></div>
+<div id="end"><div class="title endT" id="endT">🏆 최종 생존자</div><div class="champ" id="champ"></div><div class="endTop" id="endTop"></div></div>
+<div id="boardOv"><h3>⭐ 점수 순위</h3><div id="boardL"></div></div>
 
 <div id="app">
   <header><div class="qno" id="qno">R1</div><div class="qtext" id="qtext"></div><div class="clock" id="clock">10</div></header>
@@ -131,7 +138,10 @@ function render(){
     $('stamp').dataset.r=R.round;$('stamp').innerHTML=labelHTML(R.ans==='A'?R.a:R.b,R.ans,'',R.ans==='A'?R.ia:R.ib);
     $('stamp').style.animation='none';void $('stamp').offsetWidth;$('stamp').style.animation='';}
   if(ph==='reveal'&&st){const out=st.before-st.survivors;
-    $('revInfo').innerHTML=(R.e?`<div style="color:var(--gold)">💡 ${esc(R.e)}</div>`:'')+(st.saved?'전원 오답! 모두 생존합니다 🙌':`탈락 <b style="color:var(--x)">${out}</b>명 · 생존 <b style="color:var(--ok)">${st.survivors}</b>명`)}
+    $('revInfo').innerHTML=(R.e?`<div style="color:var(--gold)">💡 ${esc(R.e)}</div>`:'')+(st.saved?'전원 오답! 모두 생존합니다 🙌':`탈락 <b style="color:var(--x)">${out}</b>명 · 생존 <b style="color:var(--ok)">${st.survivors}</b>명`)+(R.fast&&R.scoring!==false?`<div>⚡ 가장 빨리 맞힌 사람: ${R.fast.a} <b>${esc(R.fast.n)}</b> (${R.fast.t}초)</div>`:'')}
+  const tl=(R.top||[]).map((t,i)=>`<div class="bl"><span>${i+1}. ${t.a} ${esc(t.n)}</span><b>${(+t.s).toFixed(2)}</b></div>`).join('');
+  $('boardOv').classList.toggle('on',!!R.showBoard&&R.scoring!==false&&ph!=='ended'&&!!tl);if($('boardL').innerHTML!==tl)$('boardL').innerHTML=tl;
+  const et=ph==='ended'&&R.scoring!==false&&tl?'<div style="grid-column:1/-1;text-align:center;font-family:Black Han Sans;font-size:4vh;color:var(--gold)">⭐ 점수 TOP 10</div>'+tl:'';if($('endTop').innerHTML!==et)$('endTop').innerHTML=et;
   lastPhase=ph;layout();
 }
 

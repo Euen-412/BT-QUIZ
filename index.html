@@ -48,6 +48,11 @@ body{overflow:hidden;user-select:none;-webkit-user-select:none}
 .answer .sym{font-size:150px}.answer .word{font-size:min(80px,calc(85vw / var(--n)))}
 .res{font-size:40px}
 .res.ok{color:var(--ok)} .res.bad{color:var(--x)} .res.saved{color:var(--gold)}
+.gainl{font-size:17px;font-weight:900;color:var(--gold)}
+.mtop{display:grid;gap:4px;width:100%;max-width:330px;margin-top:4px}
+.mtop div{display:flex;justify-content:space-between;background:var(--panel);border-radius:10px;padding:6px 12px;font-size:14px}
+.mtop div.me{outline:2px solid var(--gold)}
+.mtop b{color:var(--gold)}
 .winners{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-height:40vh;overflow:auto}
 .winners span{background:var(--panel);padding:6px 12px;border-radius:99px;font-size:15px}
 .ghost{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);text-align:center;padding:10px;font-size:14px;color:var(--gold);z-index:4}
@@ -80,8 +85,8 @@ body{overflow:hidden;user-select:none;-webkit-user-select:none}
     <div class="ghost" id="ghost" style="display:none"></div>
     <div class="ov" id="ovLobby"><div class="huge" id="lobEmo"></div><div class="title" style="font-size:30px" id="lobName"></div><div class="sub" id="lobSub"></div></div>
     <div class="ov" id="ovLocked"><div class="title huge">마감!</div><div class="sub" id="lockSub">정답 공개를 기다리는 중…</div></div>
-    <div class="ov" id="ovReveal"><div class="sub">정답은</div><div class="answer" id="ans"></div><div class="res title" id="res"></div><div class="sub" id="exp"></div><div class="sub" id="surv"></div></div>
-    <div class="ov" id="ovEnd"><div class="title huge" id="endTitle">게임 종료</div><div class="sub" id="endSub"></div><div class="winners" id="winners"></div></div>
+    <div class="ov" id="ovReveal"><div class="sub">정답은</div><div class="answer" id="ans"></div><div class="res title" id="res"></div><div class="sub" id="exp"></div><div class="sub" id="surv"></div><div class="gainl" id="gainl"></div><div class="mtop" id="topR"></div></div>
+    <div class="ov" id="ovEnd"><div class="title huge" id="endTitle">게임 종료</div><div class="sub" id="endSub"></div><div class="gainl" id="endScore"></div><div class="mtop" id="topE"></div><div class="winners" id="winners"></div></div>
   </div>
 </section>
 
@@ -139,6 +144,7 @@ async function move(side){
   if(!R||!me||!isAlive()||R.phase!=='question'||clock(R)<=0)return;
   const prev=curChoice();if(prev===side)return;
   myChoice=side;myRound=R.round;if(navigator.vibrate)navigator.vibrate(15);paintMe();
+  if(prev&&R.scoring!==false&&(R.chgPen??0.5)>0){const h=$('hint');h.textContent=`바꿨어요 · −${R.chgPen??0.5}점`;h.style.display='';clearTimeout(h._t);h._t=setTimeout(()=>{h.textContent='';h.style.display='none'},1500);h._hold=Date.now()+1500}
   try{await db.update(`rooms/${room}/players/${db.uid}`,{choice:side,round:R.round})}
   catch(e){myChoice=prev;paintMe();$('hint').style.display='';$('hint').textContent='시간이 끝나서 바꿀 수 없어요'}
 }
@@ -151,7 +157,9 @@ function render(){
   if(!R||!me)return;
   const alive=isAlive(),P=R.phase;
   $('meTag').innerHTML=`${me.avatar} ${esc(me.name)} ${alive?'<span style="color:var(--ok)">● 생존</span>':'<span style="color:var(--x)">● 관전</span>'}`;
-  $('metaR').textContent=P==='lobby'?'대기 중':`${R.qNo}/${R.qTotal} 라운드`;
+  const sc=R.score||{},my=sc[db.uid]||0,rank=1+Object.values(sc).filter(v=>v>my).length,useS=R.scoring!==false;
+  $('metaR').innerHTML=(P==='lobby'?'대기 중':`${R.qNo}/${R.qTotal} 라운드`)+(useS&&P!=='lobby'?` · ⭐ <b style="color:var(--gold)">${my.toFixed(2)}</b>점 ${Object.keys(sc).length?rank+'위':''}`:'');
+  const topHTML=(R.top||[]).slice(0,5).map((t,i)=>`<div class="${t.n===me.name?'me':''}"><span>${i+1}. ${t.a} ${esc(t.n)}</span><b>${(+t.s).toFixed(2)}</b></div>`).join('');
   $('q').textContent=R.q||'곧 첫 문제가 나옵니다!';
   const hasPic=!!(R.ia||R.ib)&&R.phase!=='lobby';document.querySelector('.field').classList.toggle('hasPic',hasPic);
   const LA=labelHTML(hasPic?R.a:(R.a||'O'),'A','',hasPic?R.ia:''),LB=labelHTML(hasPic?R.b:(R.b||'X'),'B','',hasPic?R.ib:'');
@@ -173,12 +181,16 @@ function render(){
     else if(alive&&R.stats&&R.stats.saved){r.textContent='전원 오답 → 모두 생존!';r.classList.add('saved')}
     else r.textContent='';
     $('exp').textContent=R.e||'';$('surv').textContent=R.stats?`생존자 ${R.stats.survivors}명`:'';
+    const g=(R.gain||{})[db.uid];$('gainl').textContent=useS&&g!==undefined?`⭐ ${g>=0?'+':''}${g.toFixed(2)}점 · 총 ${my.toFixed(2)}점 (${rank}위)`:useS?`⭐ 총 ${my.toFixed(2)}점 (${rank}위)`:'';
+    if($('topR').innerHTML!==(useS?topHTML:''))$('topR').innerHTML=useS?topHTML:'';
   }
   $('ovEnd').classList.toggle('on',P==='ended');
   if(P==='ended'){const w=R.winners||[];
     $('endTitle').textContent=alive?(w.length===1?'🏆 최후의 1인!':'🏆 최종 생존!'):'게임 종료';
     $('endSub').textContent=w.length?`최종 생존자 ${w.length}명`:'생존자가 없어요';
-    $('winners').innerHTML=w.slice(0,100).map(([n,a])=>`<span>${a} ${esc(n)}</span>`).join('')}
+    $('winners').innerHTML=w.slice(0,100).map(([n,a])=>`<span>${a} ${esc(n)}</span>`).join('');
+    $('endScore').textContent=useS?`⭐ 내 점수 ${my.toFixed(2)}점 · ${rank}위`:'';
+    const tE=useS?(R.top||[]).slice(0,10).map((t,i)=>`<div class="${t.n===me.name?'me':''}"><span>${i+1}. ${t.a} ${esc(t.n)}</span><b>${(+t.s).toFixed(2)}</b></div>`).join(''):'';if($('topE').innerHTML!==tE)$('topE').innerHTML=tE}
 }
 let posKey='',crowdEls=new Map();
 function renderCrowd(force){
@@ -212,7 +224,7 @@ addEventListener('resize',()=>renderCrowd(true));
 function tick(){
   if(R){const left=clock(R),locked=R.phase==='locked'||(R.phase==='question'&&left<=0);
     $('ovLocked').classList.toggle('on',locked);
-    $('hint').style.display=R.phase==='question'&&!locked&&isAlive()&&!curChoice()?'':'none';
+    const hh=$('hint');if(!(hh._hold>Date.now())){const show=R.phase==='question'&&!locked&&isAlive()&&!curChoice();hh.style.display=show?'':'none';if(show)hh.textContent=R.scoring!==false?'빨리 고를수록 점수 UP · 바꾸면 감점':'정답이라고 생각하는 쪽을 누르세요'}
     if(R.phase==='question'){$('tbi').style.width=Math.min(100,left/(R.dur*1000)*100)+'%';$('tb').classList.toggle('low',left<3000)}
     else $('tbi').style.width=R.phase==='lobby'?'100%':'0%'}
   requestAnimationFrame(tick)}
