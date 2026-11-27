@@ -110,7 +110,7 @@ textarea{width:100%;resize:vertical;line-height:1.5}
     <div class="qrs">
       <div class="qrb"><b>참가자용</b><div class="qrimg" id="qrP"></div><div class="muted" id="urlP" style="word-break:break-all"></div><button class="btn sm" id="copyP">주소 복사</button></div>
       <div class="qrb"><b style="color:var(--x)">마스터용 🔒</b><div class="qrimg blur" id="qrM"></div>
-        <div class="muted">찍으면 그 폰이 이 화면처럼 모든 걸 제어해요.<br>빔프로젝터에 띄우지 마세요!</div>
+        <div class="muted">찍으면 이 화면처럼 모든 걸 제어 가능.<br>빔프로젝터에 띄우지 말 것!</div>
         <div class="row" style="justify-content:center"><button class="btn sm" id="showM">마스터 QR 보기</button><button class="btn sm" id="copyM">마스터 링크 복사</button></div></div>
     </div>
   </div>
@@ -126,7 +126,7 @@ textarea{width:100%;resize:vertical;line-height:1.5}
       <label class="sw"><input type="checkbox" id="scoreOn"> ⭐ 점수 사용 (빨리 맞힐수록 높은 점수)</label>
       <div class="row"><span>1등 점수</span><input type="number" id="spMax" min="1" max="1000" step="1" style="width:80px">
         <span>바꿀 때마다</span><input type="number" id="spPen" min="0" max="100" step="0.1" style="width:80px"><span>점 감점</span></div>
-      <div class="muted">정답자 중 빨리 고른 순서대로 1등 점수 → 참가자 수에 맞춰 조금씩 줄어요 (예: 200명이면 한 칸에 0.05점). 오답은 0점.</div>
+      <div class="muted">정답자 중 빨리 고른 순서대로 1등 점수 → 참가자 수에 맞춰 조금씩 줄어듦 (예: 200명이면 한 칸에 0.05점). 오답은 0점.</div>
       <label class="sw"><input type="checkbox" id="boardOn"> 📺 대형화면에 점수 순위 띄우기</label>
     </div>
     <div class="row" style="margin-top:6px">
@@ -176,7 +176,7 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 import { initDB, DEL, NOW, qs, esc, labelHTML, makeClock, qrInto, withMock, uploadImage, ensureImages } from '/db.js';
 const nm=(t,s)=>t||(s==='A'?'왼쪽':'오른쪽');
 const $=id=>document.getElementById(id);
-const PRESETS=[['O','X'],['파랑','빨강'],['예','아니오'],['맞다','아니다'],['A','B'],['1번','2번']];
+const PRESETS=[['O','X'],['예','아니오'],['1번','2번']];
 const SAMPLE=[
   {q:'문어의 심장은 3개다',a:'O',b:'X',ans:'A',t:10,e:'아가미 심장 2개 + 몸 심장 1개'},
   {q:'바나나가 열리는 것은?',a:'나무',b:'풀',ans:'B',t:10,e:'바나나는 거대한 여러해살이 풀이에요'},
@@ -210,7 +210,7 @@ const rp=p=>`rooms/${room}${p||''}`;
 const up=patch=>db.update(rp(),patch).catch(e=>toast('저장 실패: '+e.message));
 const alive=p=>{const d=R.dead||{},rv=R.revived||{};if(d[p.id]!==undefined)return false;if(p.late&&p.g===(R.g||0)&&!rv[p.id])return false;return true};
 const ch=p=>p.round===R.round?p.choice:'';
-
+ 
 async function start(){
   $('main').style.display='';$('bar').style.display='';$('pRoom').textContent=room;
   const pUrl=withMock(location.origin+'/');
