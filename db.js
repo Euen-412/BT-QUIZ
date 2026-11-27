@@ -212,9 +212,19 @@ const IDB = () => new Promise((res, rej) => { const r = indexedDB.open('quizimg'
 async function idbPut(k, v) { try { const db = await IDB(); await new Promise(r => { const t = db.transaction('b', 'readwrite'); t.objectStore('b').put(v, k); t.oncomplete = r; t.onerror = r; }); } catch (_) {} }
 async function idbGet(k) { try { const db = await IDB(); return await new Promise(r => { const q = db.transaction('b').objectStore('b').get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(null); }); } catch (_) { return null; } }
 
-async function shrink(file) {
+async function decode(file) {
   const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) throw new Error('사진을 읽을 수 없어요');
+  if (bmp) return bmp;
+  // 일부 브라우저용 예비 방법
+  return await new Promise(res => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => { res(im); }; im.onerror = () => { URL.revokeObjectURL(u); res(null); }; im.src = u; });
+}
+async function shrink(file) {
+  const bmp = await decode(file);
+  if (!bmp) {
+    // 줄이지 못해도 일반 사진 형식이면 그대로 올림
+    if (/^image\/(jpeg|png|webp|gif)$/.test(file.type) && file.size < 3 * 1024 * 1024) return file;
+    throw new Error(/heic|heif/i.test(file.type + file.name) ? '아이폰 HEIC 사진은 바로 못 올려요. 사진을 캡처하거나 JPG로 바꿔서 올려 주세요' : '이 파일은 사진으로 읽을 수 없어요 (JPG·PNG로 올려 주세요)');
+  }
   const k = Math.min(1, 720 / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
   const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
@@ -222,7 +232,7 @@ async function shrink(file) {
 }
 async function send(blob, room) {
   const r = await fetch('/upload?r=' + encodeURIComponent(room), { method: 'POST', headers: { 'x-token': localStorage.getItem('q_tok') || '' }, body: blob });
-  if (!r.ok) throw new Error(r.status === 403 ? '마스터만 사진을 올릴 수 있어요' : '사진 올리기 실패 (' + r.status + ')');
+  if (!r.ok) throw new Error(r.status === 403 ? '마스터 권한이 끊겼어요. 새로고침(F5) 후 다시 올려 주세요' : r.status === 413 ? '사진이 너무 커요 (3MB 이하로)' : r.status === 415 ? '사진 파일이 아니에요 (JPG·PNG로 올려 주세요)' : '사진 올리기 실패 (' + r.status + ')');
   return (await r.json()).url;
 }
 export async function uploadImage(file, room) {

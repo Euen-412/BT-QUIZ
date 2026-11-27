@@ -385,7 +385,7 @@ function cleanItems(list){return list.map(x=>({q:String(x.q||'').trim().slice(0,
   ia:String(x.ia||''),ib:String(x.ib||''),ans:x.ans==='A'||x.ans==='B'?x.ans:'',t:Math.max(0,Math.min(300,Math.round(+x.t||0)))||'',e:String(x.e||'').trim().slice(0,200)}))}
 const validItem=x=>x&&String(x.q).trim()&&(String(x.a).trim()||x.ia)&&(String(x.b).trim()||x.ib)&&(x.ans==='A'||x.ans==='B');
 const ansLabel=(x,s)=>{const im=s==='A'?x.ia:x.ib,t=s==='A'?x.a:x.b;return (im?`<img src="${esc(im)}">`:'')+esc(t||(im?'사진':s==='A'?'왼쪽':'오른쪽'))};
-const picCell=(x,s)=>{const im=s==='A'?x.ia:x.ib;return im?`<img src="${esc(im)}"><button class="btn sm" data-act="rm${s}">✕ 사진 빼기</button>`:`<label class="btn sm">📷 사진 넣기<input type="file" accept="image/*" data-img="${s}" hidden></label><span class="muted">(선택)</span>`};
+const picCell=(x,s)=>{const im=s==='A'?x.ia:x.ib;return im?`<img src="${esc(im)}"><button class="btn sm" data-act="rm${s}">✕ 사진 빼기</button>`:`<label class="btn sm">📷 사진 넣기<input type="file" accept="image/*" data-img="${s}" hidden></label><span class="muted">(선택 · 끌어다 놓기 가능)</span>`};
 const presetOpts=PRESETS.map((p,i)=>`<option value="${i}">${p[0]} / ${p[1]}</option>`).join('');
 $('allPreset').innerHTML+=presetOpts;
 
@@ -427,11 +427,17 @@ $('rounds').onclick=e=>{const card=e.target.closest('.rc');if(!card)return;const
 function refreshPic(card,i){for(const s of ['A','B'])card.querySelector(`[data-pic=${s}]`).innerHTML=picCell(Q[i],s);
   card.querySelector('.ansbtn.A').innerHTML=ansLabel(Q[i],'A');card.querySelector('.ansbtn.B').innerHTML=ansLabel(Q[i],'B');
   card.classList.toggle('bad',!validItem(Q[i]));setDirty()}
-$('rounds').addEventListener('change',async e=>{const inp=e.target.closest('[data-img]');if(!inp||!inp.files[0])return;
-  const card=inp.closest('.rc'),i=+card.dataset.i,s=inp.dataset.img,cell=card.querySelector(`[data-pic=${s}]`);
+$('rounds').addEventListener('change',e=>{const inp=e.target.closest('[data-img]');if(!inp||!inp.files[0])return;putPic(inp.closest('.rc'),inp.dataset.img,inp.files[0])});
+// 사진을 라운드의 사진 칸에 끌어다 놓아도 올라가게
+async function putPic(card,s,file){const i=+card.dataset.i,cell=card.querySelector(`[data-pic=${s}]`);
   cell.innerHTML='<span class="muted">올리는 중…</span>';
-  try{Q[i][s==='A'?'ia':'ib']=await uploadImage(inp.files[0],room);toast('사진을 넣었어요. 저장을 눌러 주세요',1)}catch(err){toast(err.message)}
-  refreshPic(card,i)});
+  try{Q[i][s==='A'?'ia':'ib']=await uploadImage(file,room);toast('사진을 넣었어요. 저장을 눌러 주세요',1)}catch(err){toast(err.message)}
+  refreshPic(card,i)}
+$('rounds').addEventListener('dragover',e=>{if(e.target.closest('[data-pic]')){e.preventDefault();e.target.closest('[data-pic]').style.outline='2px dashed var(--gold)'}});
+$('rounds').addEventListener('dragleave',e=>{const c=e.target.closest('[data-pic]');if(c)c.style.outline=''});
+$('rounds').addEventListener('drop',e=>{const c=e.target.closest('[data-pic]');if(!c)return;e.preventDefault();c.style.outline='';
+  const f=[...(e.dataTransfer.files||[])].find(f=>f.type.startsWith('image/')||/\.(heic|heif|jpe?g|png|webp|gif)$/i.test(f.name));
+  if(!f)return toast('사진 파일을 끌어다 놓아 주세요');putPic(c.closest('.rc'),c.dataset.pic,f)});
 $('applyN').onclick=()=>{const n=Math.max(1,Math.min(200,Math.round(+$('nRounds').value)||1));
   if(n<Q.length&&!confirm(`R${n+1}~R${Q.length}를 지울까요?`))return;
   const last=Q[Q.length-1]||blank();while(Q.length<n)Q.push({...blank(),a:last.a||'O',b:last.b||'X',t:last.t||''});Q.length=n;renderEditor();setDirty()};
